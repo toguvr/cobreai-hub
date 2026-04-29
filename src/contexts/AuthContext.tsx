@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     localStorage.removeItem('@DrPlantaoHub:token');
     localStorage.removeItem('@DrPlantaoHub:user');
+    localStorage.removeItem('@DrPlantaoHub:enterprise');
     setData({} as AuthState);
   }, []);
 

@@ -12,6 +12,8 @@ interface EnterpriseContextData {
   refresh(): void;
 }
 
+const STORAGE_KEY = '@DrPlantaoHub:enterprise';
+
 const EnterpriseContext = createContext<EnterpriseContextData>(
   {} as EnterpriseContextData,
 );
@@ -20,37 +22,63 @@ export function EnterpriseProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [enterprises, setEnterprises] = useState<UserEnterprise[]>([]);
   const [current, setCurrent] = useState<Enterprise | null>(() => {
-    const stored = localStorage.getItem('@DrPlantaoHub:enterprise');
+    const stored = localStorage.getItem(STORAGE_KEY);
     return stored ? JSON.parse(stored) : null;
   });
   const [loading, setLoading] = useState(false);
 
   const handleSetCurrent = useCallback((enterprise: Enterprise) => {
     setCurrent(enterprise);
-    localStorage.setItem('@DrPlantaoHub:enterprise', JSON.stringify(enterprise));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(enterprise));
+  }, []);
+
+  const clearCurrent = useCallback(() => {
+    setCurrent(null);
+    localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      clearCurrent();
+      setEnterprises([]);
+      return;
+    }
     setLoading(true);
     try {
-      const response = await api.get('/userEnterprise/my-enterprises');
-      setEnterprises(response.data);
+      const response = await api.get<UserEnterprise[]>('/userEnterprise/my-enterprises');
+      const list = Array.isArray(response.data) ? response.data : [];
+      setEnterprises(list);
 
-      // Se não há nenhuma selecionada, seleciona a primeira
-      if (!current && response.data.length > 0) {
-        handleSetCurrent(response.data[0].enterprise);
+      // Lê o current diretamente do localStorage (não da closure) para
+      // evitar usar valor desatualizado entre renders.
+      const storedRaw = localStorage.getItem(STORAGE_KEY);
+      const stored: Enterprise | null = storedRaw ? JSON.parse(storedRaw) : null;
+
+      // Verifica se a org armazenada ainda pertence ao usuário atual
+      const storedStillValid =
+        stored && list.some(ue => ue.enterprise.id === stored.id);
+
+      if (storedStillValid && stored) {
+        // Mantém a seleção mas atualiza com dados frescos (logo, cor, etc)
+        const fresh = list.find(ue => ue.enterprise.id === stored.id)?.enterprise;
+        if (fresh) handleSetCurrent(fresh);
+      } else if (list.length > 0) {
+        // Auto-seleciona a primeira org do usuário
+        handleSetCurrent(list[0].enterprise);
+      } else {
+        // Usuário não tem orgs vinculadas
+        clearCurrent();
       }
     } catch {
-      // silently fail
+      // Falhou ao buscar — não muda o estado
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, current, handleSetCurrent]);
+  }, [isAuthenticated, handleSetCurrent, clearCurrent]);
 
   useEffect(() => {
     refresh();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refresh]);
 
   return (
     <EnterpriseContext.Provider
