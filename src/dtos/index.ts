@@ -100,6 +100,8 @@ export interface AppointmentSummary {
   total_price: number;
   doctor_name: string | null;
   expertise_name: string | null;
+  start_checkin: string | null;
+  stop_checkin: string | null;
 }
 
 export interface HospitalDetail {
@@ -119,7 +121,7 @@ export interface HospitalDetail {
     income_month: number;
     outcome_month: number;
   };
-  recent_appointments: AppointmentSummary[];
+  month_appointments: AppointmentSummary[];
   doctors: DoctorSummary[];
 }
 

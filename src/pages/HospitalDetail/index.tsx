@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -28,10 +28,66 @@ import { toast } from 'react-toastify';
 import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
 import api from '../../services/api';
-import type { HospitalDetail } from '../../dtos';
+import type { HospitalDetail, AppointmentSummary } from '../../dtos';
 
 function fmt(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+const DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+const EXPERTISE_PALETTE = [
+  { bg: '#E3F2FD', fg: '#1565C0', border: '#1976D2' },
+  { bg: '#F3E5F5', fg: '#6A1B9A', border: '#8E24AA' },
+  { bg: '#E8F5E9', fg: '#2E7D32', border: '#43A047' },
+  { bg: '#FFF3E0', fg: '#E65100', border: '#FB8C00' },
+  { bg: '#FCE4EC', fg: '#AD1457', border: '#D81B60' },
+  { bg: '#E0F7FA', fg: '#00838F', border: '#00ACC1' },
+  { bg: '#EFEBE9', fg: '#4E342E', border: '#6D4C41' },
+  { bg: '#ECEFF1', fg: '#37474F', border: '#546E7A' },
+  { bg: '#F1F8E9', fg: '#558B2F', border: '#7CB342' },
+  { bg: '#EDE7F6', fg: '#4527A0', border: '#5E35B1' },
+];
+
+function expertiseColor(name?: string | null) {
+  if (!name) return { bg: '#FEEBC8', fg: '#9C4221', border: '#ED8936' };
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return EXPERTISE_PALETTE[Math.abs(h) % EXPERTISE_PALETTE.length];
+}
+
+function hourLabel(dateISO: string) {
+  return new Date(dateISO).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// Constrói a grade do mês (semanas começando no domingo)
+function buildMonthGrid(monthKey: string): Date[] {
+  const [y, m] = monthKey.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const last = new Date(y, m, 0);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - first.getDay());
+  const gridEnd = new Date(last);
+  gridEnd.setDate(last.getDate() + (6 - last.getDay()));
+  const days: Date[] = [];
+  for (
+    let d = new Date(gridStart);
+    d <= gridEnd;
+    d.setDate(d.getDate() + 1)
+  ) {
+    days.push(new Date(d));
+  }
+  return days;
+}
+
+function dateKey(d: Date | string) {
+  const dt = typeof d === 'string' ? new Date(d) : d;
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(
+    dt.getDate(),
+  ).padStart(2, '0')}`;
 }
 
 function KPICard({
@@ -120,6 +176,20 @@ export default function HospitalDetail() {
   const hospital = data?.hospital;
   const kpis = data?.kpis;
 
+  // Calendário: grade do mês + jornadas agrupadas por dia
+  const monthGrid = useMemo(() => buildMonthGrid(month), [month]);
+  const apptsByDay = useMemo(() => {
+    const map = new Map<string, AppointmentSummary[]>();
+    (data?.month_appointments ?? []).forEach(a => {
+      const key = dateKey(a.date);
+      const list = map.get(key) ?? [];
+      list.push(a);
+      map.set(key, list);
+    });
+    return map;
+  }, [data]);
+  const [refYear, refMonth] = month.split('-').map(Number);
+
   return (
     <PrivateLayout>
       {/* Header */}
@@ -198,62 +268,171 @@ export default function HospitalDetail() {
         onChange={(_, v) => setTab(v)}
         sx={{ mb: 2, borderBottom: '1px solid #e8eef2' }}
       >
-        <Tab label="Plantões Recentes" sx={{ fontSize: 13, textTransform: 'none' }} />
+        <Tab label="Escala" sx={{ fontSize: 13, textTransform: 'none' }} />
         <Tab label="Médicos" sx={{ fontSize: 13, textTransform: 'none' }} />
         <Tab label="Informações" sx={{ fontSize: 13, textTransform: 'none' }} />
       </Tabs>
 
-      {/* Tab 0 — Plantões recentes */}
+      {/* Tab 0 — Escala em calendário */}
       {tab === 0 && (
-        <Paper elevation={0} sx={{ border: '1px solid #e8eef2' }}>
+        <Paper
+          elevation={0}
+          sx={{ border: '1px solid #e8eef2', borderRadius: 2, overflow: 'hidden' }}
+        >
           {loading ? (
             <Box display="flex" justifyContent="center" p={3}>
               <CircularProgress size={24} />
             </Box>
           ) : (
-            <Table size="small">
-              <TableHead sx={{ bgcolor: '#f8fafc' }}>
-                <TableRow>
-                  {['Data', 'Título', 'Especialidade', 'Médico', 'Duração', 'Valor'].map(h => (
-                    <TableCell key={h} sx={{ fontWeight: 700, fontSize: 11, color: '#475569' }}>
-                      {h}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {!data?.recent_appointments.length ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary', fontSize: 13 }}>
-                      Nenhum plantão encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  data.recent_appointments.map(a => (
-                    <TableRow key={a.id} hover>
-                      <TableCell sx={{ fontSize: 12 }}>
-                        {new Date(a.date).toLocaleDateString('pt-BR')}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>
-                        {a.title}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>
-                        {a.expertise_name ?? '—'}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>
-                        {a.doctor_name ?? (
-                          <Typography fontSize={11} color="text.secondary">
-                            Sem médico
+            <Box>
+              {/* Cabeçalho dos dias da semana */}
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  bgcolor: '#f8fafc',
+                }}
+              >
+                {DAY_LABELS.map(d => (
+                  <Box
+                    key={d}
+                    sx={{
+                      py: 1,
+                      textAlign: 'center',
+                      borderRight: '1px solid #e8eef2',
+                      '&:last-of-type': { borderRight: 0 },
+                    }}
+                  >
+                    <Typography
+                      fontSize={11}
+                      fontWeight={700}
+                      color="#475569"
+                      sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                    >
+                      {d}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Grade do mês */}
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                }}
+              >
+                {monthGrid.map(day => {
+                  const key = dateKey(day);
+                  const list = apptsByDay.get(key) ?? [];
+                  const inMonth =
+                    day.getFullYear() === refYear &&
+                    day.getMonth() + 1 === refMonth;
+                  const isToday = key === dateKey(new Date());
+                  return (
+                    <Box
+                      key={key}
+                      sx={{
+                        minHeight: 116,
+                        borderRight: '1px solid #e8eef2',
+                        borderBottom: '1px solid #e8eef2',
+                        p: 0.75,
+                        bgcolor: inMonth ? '#fff' : '#fafbfc',
+                        opacity: inMonth ? 1 : 0.55,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minWidth: 0,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          mb: 0.5,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            bgcolor: isToday ? '#1a6b4a' : 'transparent',
+                            color: isToday ? '#fff' : '#1e293b',
+                            fontWeight: isToday ? 700 : 500,
+                            fontSize: 12,
+                          }}
+                        >
+                          {day.getDate()}
+                        </Box>
+                        {list.length > 0 && (
+                          <Typography
+                            fontSize={10}
+                            fontWeight={600}
+                            color="text.secondary"
+                          >
+                            {list.length}
                           </Typography>
                         )}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>{a.duration}h</TableCell>
-                      <TableCell sx={{ fontSize: 12 }}>{fmt(a.total_price)}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                      </Box>
+
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        {list.slice(0, 4).map(a => {
+                          const c = expertiseColor(a.expertise_name);
+                          const open = !a.doctor_name;
+                          return (
+                            <Tooltip
+                              key={a.id}
+                              title={`${hourLabel(a.date)} · ${
+                                a.expertise_name ?? 'Especialidade'
+                              } · ${a.doctor_name ?? 'Em aberto'} · ${
+                                a.duration
+                              }h`}
+                            >
+                              <Box
+                                sx={{
+                                  bgcolor: open ? '#FEEBC8' : c.bg,
+                                  borderLeft: `3px solid ${
+                                    open ? '#ED8936' : c.border
+                                  }`,
+                                  borderRadius: 0.5,
+                                  px: 0.5,
+                                  py: 0.25,
+                                  mb: 0.25,
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                <Typography
+                                  fontSize={10}
+                                  fontWeight={600}
+                                  color={open ? '#9C4221' : c.fg}
+                                  noWrap
+                                >
+                                  {hourLabel(a.date)}{' '}
+                                  {a.doctor_name ?? 'Em aberto'}
+                                </Typography>
+                              </Box>
+                            </Tooltip>
+                          );
+                        })}
+                        {list.length > 4 && (
+                          <Typography
+                            fontSize={10}
+                            color="text.secondary"
+                            sx={{ pl: 0.5 }}
+                          >
+                            + {list.length - 4} mais
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
           )}
         </Paper>
       )}
