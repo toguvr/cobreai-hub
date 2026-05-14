@@ -134,3 +134,75 @@ export interface FinancialData {
   rows: FinancialRow[];
   totals: { income: number; outcome: number };
 }
+
+// ── Preços versionados da empresa ──────────────────────────────────────
+
+export interface EnterprisePriceVersion {
+  id: string;
+  enterprise_id: string;
+  expertise_id: string;
+  effective_from: string; // YYYY-MM-DD
+  doctor_price: number;
+  total_price: number;
+  doctor_fds_price: number;
+  total_fds_price: number;
+  monthly_doctor_price: number;
+  monthly_total_price: number;
+  created_by?: string;
+  created_at: string;
+}
+
+export interface EnterprisePriceExpertise {
+  expertise_id: string;
+  expertise_name: string;
+  current: EnterprisePriceVersion | null;
+  has_price: boolean;
+  version_count: number;
+}
+
+export interface EnterprisePriceHospitalGroup {
+  hospital_id: string;
+  hospital_name: string | null;
+  expertises: EnterprisePriceExpertise[];
+  missing_count: number;
+}
+
+export interface EnterprisePriceList {
+  hospitals: EnterprisePriceHospitalGroup[];
+}
+
+export interface EnterprisePriceRequest {
+  id: string;
+  enterprise_id: string;
+  hospital_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by?: string;
+  resolved_by?: string;
+  resolved_at?: string | null;
+  created_at: string;
+  hospital?: Hospital;
+}
+
+export interface EnterpriseClosingRow {
+  hospital_id: string;
+  hospital_name: string | null;
+  appointments: number;
+  bruto: number;
+  liquido: number;
+}
+
+export interface EnterpriseClosingMissing {
+  hospital_id: string;
+  hospital_name: string | null;
+  expertise_id: string;
+  expertise_name: string | null;
+  appointments_affected: number;
+}
+
+export interface EnterpriseClosingData {
+  status: 'ok' | 'incomplete' | 'empty';
+  month: string;
+  rows: EnterpriseClosingRow[];
+  totals: { bruto: number; liquido: number; appointments: number };
+  missing: EnterpriseClosingMissing[];
+}

@@ -16,6 +16,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import PriceChangeIcon from '@mui/icons-material/PriceChange';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -29,6 +30,7 @@ const navItems = [
   { label: 'Hospitais', icon: <LocalHospitalIcon />, path: '/hospitais' },
   { label: 'Membros', icon: <PeopleIcon />, path: '/usuarios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
+  { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
 ];
 
 export function Sidebar() {

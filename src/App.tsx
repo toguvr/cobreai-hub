@@ -13,6 +13,7 @@ import Hospitals from './pages/Hospitals';
 import HospitalDetail from './pages/HospitalDetail';
 import Users from './pages/Users';
 import Financial from './pages/Financial';
+import Prices from './pages/Prices';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -65,6 +66,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Financial />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/precos"
+        element={
+          <PrivateRoute>
+            <Prices />
           </PrivateRoute>
         }
       />
