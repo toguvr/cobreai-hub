@@ -17,6 +17,7 @@ import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PriceChangeIcon from '@mui/icons-material/PriceChange';
+import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -31,6 +32,7 @@ const navItems = [
   { label: 'Membros', icon: <PeopleIcon />, path: '/usuarios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
+  { label: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes' },
 ];
 
 interface SidebarProps {

@@ -14,6 +14,7 @@ import HospitalDetail from './pages/HospitalDetail';
 import Users from './pages/Users';
 import Financial from './pages/Financial';
 import Prices from './pages/Prices';
+import Settings from './pages/Settings';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -74,6 +75,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Prices />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/configuracoes"
+        element={
+          <PrivateRoute>
+            <Settings />
           </PrivateRoute>
         }
       />
