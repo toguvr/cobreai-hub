@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Paper,
@@ -90,6 +91,18 @@ function dateKey(d: Date | string) {
   ).padStart(2, '0')}`;
 }
 
+// 7 dias da semana (domingo→sábado) que contém a data informada
+function buildWeekGrid(d: Date): Date[] {
+  const start = new Date(d);
+  start.setDate(d.getDate() - d.getDay());
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return day;
+  });
+}
+
+
 function KPICard({
   label,
   value,
@@ -142,6 +155,9 @@ export default function HospitalDetail() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  // Escala: visão mês (grade) ou semana (drill-down ao clicar num dia)
+  const [scheduleView, setScheduleView] = useState<'month' | 'week'>('month');
+  const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
 
   const load = async (selectedMonth: string) => {
     if (!current?.id || !hospital_id) return;
@@ -166,6 +182,7 @@ export default function HospitalDetail() {
   // Calendário: grade do mês + jornadas agrupadas por dia.
   // IMPORTANTE: hooks antes de qualquer return condicional (Rules of Hooks).
   const monthGrid = useMemo(() => buildMonthGrid(month), [month]);
+  const weekGrid = useMemo(() => buildWeekGrid(weekAnchor), [weekAnchor]);
   const apptsByDay = useMemo(() => {
     const map = new Map<string, AppointmentSummary[]>();
     (data?.month_appointments ?? []).forEach(a => {
@@ -174,8 +191,24 @@ export default function HospitalDetail() {
       list.push(a);
       map.set(key, list);
     });
+    // ordena cada dia por horário
+    map.forEach(list =>
+      list.sort(
+        (x, y) => new Date(x.date).getTime() - new Date(y.date).getTime(),
+      ),
+    );
     return map;
   }, [data]);
+
+  // Trocar de mês volta para a visão de grade
+  useEffect(() => {
+    setScheduleView('month');
+  }, [month]);
+
+  const openWeek = (day: Date) => {
+    setWeekAnchor(day);
+    setScheduleView('week');
+  };
 
   if (loading && !data) {
     return (
@@ -286,6 +319,34 @@ export default function HospitalDetail() {
             </Box>
           ) : (
             <Box>
+              {/* Barra: visão semana mostra botão de voltar + intervalo */}
+              {scheduleView === 'week' && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
+                    px: 2,
+                    py: 1.25,
+                    bgcolor: '#f8fafc',
+                    borderBottom: '1px solid #e8eef2',
+                  }}
+                >
+                  <Button
+                    size="small"
+                    startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
+                    onClick={() => setScheduleView('month')}
+                    sx={{ textTransform: 'none', color: '#1a6b4a' }}
+                  >
+                    Voltar ao mês
+                  </Button>
+                  <Typography fontSize={13} fontWeight={600} color="#1e293b">
+                    Semana de {weekGrid[0].toLocaleDateString('pt-BR')} a{' '}
+                    {weekGrid[6].toLocaleDateString('pt-BR')}
+                  </Typography>
+                </Box>
+              )}
+
               {/* Cabeçalho dos dias da semana */}
               <Box
                 sx={{
@@ -294,145 +355,248 @@ export default function HospitalDetail() {
                   bgcolor: '#f8fafc',
                 }}
               >
-                {DAY_LABELS.map(d => (
-                  <Box
-                    key={d}
-                    sx={{
-                      py: 1,
-                      textAlign: 'center',
-                      borderRight: '1px solid #e8eef2',
-                      '&:last-of-type': { borderRight: 0 },
-                    }}
-                  >
-                    <Typography
-                      fontSize={11}
-                      fontWeight={700}
-                      color="#475569"
-                      sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-                    >
-                      {d}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-
-              {/* Grade do mês */}
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(7, 1fr)',
-                }}
-              >
-                {monthGrid.map(day => {
-                  const key = dateKey(day);
-                  const list = apptsByDay.get(key) ?? [];
-                  const inMonth =
-                    day.getFullYear() === refYear &&
-                    day.getMonth() + 1 === refMonth;
-                  const isToday = key === dateKey(new Date());
-                  return (
+                {(scheduleView === 'month' ? DAY_LABELS : weekGrid).map(
+                  (d, i) => (
                     <Box
-                      key={key}
+                      key={typeof d === 'string' ? d : dateKey(d)}
                       sx={{
-                        minHeight: 116,
+                        py: 1,
+                        textAlign: 'center',
                         borderRight: '1px solid #e8eef2',
-                        borderBottom: '1px solid #e8eef2',
-                        p: 0.75,
-                        bgcolor: inMonth ? '#fff' : '#fafbfc',
-                        opacity: inMonth ? 1 : 0.55,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        minWidth: 0,
+                        '&:last-of-type': { borderRight: 0 },
                       }}
                     >
+                      <Typography
+                        fontSize={11}
+                        fontWeight={700}
+                        color="#475569"
+                        sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                      >
+                        {typeof d === 'string'
+                          ? d
+                          : `${DAY_LABELS[i]} ${d.getDate()}`}
+                      </Typography>
+                    </Box>
+                  ),
+                )}
+              </Box>
+
+              {/* ── Visão MÊS ── */}
+              {scheduleView === 'month' && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                  }}
+                >
+                  {monthGrid.map(day => {
+                    const key = dateKey(day);
+                    const list = apptsByDay.get(key) ?? [];
+                    const inMonth =
+                      day.getFullYear() === refYear &&
+                      day.getMonth() + 1 === refMonth;
+                    const isToday = key === dateKey(new Date());
+                    return (
                       <Box
+                        key={key}
+                        onClick={() => openWeek(day)}
                         sx={{
+                          minHeight: 116,
+                          borderRight: '1px solid #e8eef2',
+                          borderBottom: '1px solid #e8eef2',
+                          p: 0.75,
+                          bgcolor: inMonth ? '#fff' : '#fafbfc',
+                          opacity: inMonth ? 1 : 0.55,
                           display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          mb: 0.5,
+                          flexDirection: 'column',
+                          minWidth: 0,
+                          cursor: 'pointer',
+                          transition: 'background 0.12s',
+                          '&:hover': { bgcolor: '#f1f8f4' },
                         }}
                       >
                         <Box
                           sx={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            bgcolor: isToday ? '#1a6b4a' : 'transparent',
-                            color: isToday ? '#fff' : '#1e293b',
-                            fontWeight: isToday ? 700 : 500,
-                            fontSize: 12,
+                            justifyContent: 'space-between',
+                            mb: 0.5,
                           }}
                         >
-                          {day.getDate()}
-                        </Box>
-                        {list.length > 0 && (
-                          <Typography
-                            fontSize={10}
-                            fontWeight={600}
-                            color="text.secondary"
+                          <Box
+                            sx={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              bgcolor: isToday ? '#1a6b4a' : 'transparent',
+                              color: isToday ? '#fff' : '#1e293b',
+                              fontWeight: isToday ? 700 : 500,
+                              fontSize: 12,
+                            }}
                           >
-                            {list.length}
-                          </Typography>
-                        )}
-                      </Box>
-
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        {list.slice(0, 4).map(a => {
-                          const c = expertiseColor(a.expertise_name);
-                          const open = !a.doctor_name;
-                          return (
-                            <Tooltip
-                              key={a.id}
-                              title={`${hourLabel(a.date)} · ${
-                                a.expertise_name ?? 'Especialidade'
-                              } · ${a.doctor_name ?? 'Em aberto'} · ${
-                                a.duration
-                              }h`}
+                            {day.getDate()}
+                          </Box>
+                          {list.length > 0 && (
+                            <Typography
+                              fontSize={10}
+                              fontWeight={600}
+                              color="text.secondary"
                             >
+                              {list.length}
+                            </Typography>
+                          )}
+                        </Box>
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          {list.slice(0, 4).map(a => {
+                            const c = expertiseColor(a.expertise_name);
+                            const open = !a.doctor_name;
+                            return (
+                              <Tooltip
+                                key={a.id}
+                                title={`${hourLabel(a.date)} · ${
+                                  a.expertise_name ?? 'Especialidade'
+                                } · ${a.doctor_name ?? 'Em aberto'} · ${
+                                  a.duration
+                                }h`}
+                              >
+                                <Box
+                                  sx={{
+                                    bgcolor: open ? '#FEEBC8' : c.bg,
+                                    borderLeft: `3px solid ${
+                                      open ? '#ED8936' : c.border
+                                    }`,
+                                    borderRadius: 0.5,
+                                    px: 0.5,
+                                    py: 0.25,
+                                    mb: 0.25,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  <Typography
+                                    fontSize={10}
+                                    fontWeight={600}
+                                    color={open ? '#9C4221' : c.fg}
+                                    noWrap
+                                  >
+                                    {hourLabel(a.date)}{' '}
+                                    {a.doctor_name ?? 'Em aberto'}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            );
+                          })}
+                          {list.length > 4 && (
+                            <Typography
+                              fontSize={10}
+                              color="#1a6b4a"
+                              fontWeight={600}
+                              sx={{ pl: 0.5 }}
+                            >
+                              + {list.length - 4} mais
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+
+              {/* ── Visão SEMANA: colunas com todos os nomes da escala ── */}
+              {scheduleView === 'week' && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    minHeight: 360,
+                  }}
+                >
+                  {weekGrid.map(day => {
+                    const key = dateKey(day);
+                    const list = apptsByDay.get(key) ?? [];
+                    const isToday = key === dateKey(new Date());
+                    return (
+                      <Box
+                        key={key}
+                        sx={{
+                          borderRight: '1px solid #e8eef2',
+                          '&:last-of-type': { borderRight: 0 },
+                          p: 0.75,
+                          minWidth: 0,
+                          bgcolor: isToday ? '#f1f8f4' : '#fff',
+                        }}
+                      >
+                        {list.length === 0 ? (
+                          <Typography
+                            fontSize={11}
+                            color="text.disabled"
+                            sx={{ textAlign: 'center', mt: 2 }}
+                          >
+                            —
+                          </Typography>
+                        ) : (
+                          list.map(a => {
+                            const c = expertiseColor(a.expertise_name);
+                            const open = !a.doctor_name;
+                            return (
                               <Box
+                                key={a.id}
                                 sx={{
                                   bgcolor: open ? '#FEEBC8' : c.bg,
                                   borderLeft: `3px solid ${
                                     open ? '#ED8936' : c.border
                                   }`,
-                                  borderRadius: 0.5,
-                                  px: 0.5,
-                                  py: 0.25,
-                                  mb: 0.25,
-                                  overflow: 'hidden',
+                                  borderRadius: 0.75,
+                                  px: 0.75,
+                                  py: 0.5,
+                                  mb: 0.5,
                                 }}
                               >
                                 <Typography
-                                  fontSize={10}
+                                  fontSize={11}
+                                  fontWeight={700}
+                                  color={open ? '#9C4221' : c.fg}
+                                >
+                                  {hourLabel(a.date)}
+                                  {' – '}
+                                  {hourLabel(
+                                    new Date(
+                                      new Date(a.date).getTime() +
+                                        a.duration * 3600000,
+                                    ).toISOString(),
+                                  )}
+                                </Typography>
+                                <Typography
+                                  fontSize={12}
                                   fontWeight={600}
+                                  color={open ? '#9C4221' : '#1e293b'}
+                                  sx={{
+                                    fontStyle: open ? 'italic' : 'normal',
+                                  }}
+                                >
+                                  {a.doctor_name ?? 'Em aberto'}
+                                </Typography>
+                                <Typography
+                                  fontSize={10}
                                   color={open ? '#9C4221' : c.fg}
                                   noWrap
                                 >
-                                  {hourLabel(a.date)}{' '}
-                                  {a.doctor_name ?? 'Em aberto'}
+                                  {a.expertise_name ?? 'Especialidade'} ·{' '}
+                                  {a.duration}h
                                 </Typography>
                               </Box>
-                            </Tooltip>
-                          );
-                        })}
-                        {list.length > 4 && (
-                          <Typography
-                            fontSize={10}
-                            color="text.secondary"
-                            sx={{ pl: 0.5 }}
-                          >
-                            + {list.length - 4} mais
-                          </Typography>
+                            );
+                          })
                         )}
                       </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
+                    );
+                  })}
+                </Box>
+              )}
             </Box>
           )}
         </Paper>
