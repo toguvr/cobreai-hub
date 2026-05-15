@@ -233,7 +233,7 @@ export default function HospitalDetail() {
   return (
     <PrivateLayout>
       {/* Header */}
-      <Box display="flex" alignItems="center" gap={1.5} mb={3}>
+      <Box display="flex" alignItems="center" gap={1.5} mb={3} flexWrap="wrap">
         <Box
           sx={{ cursor: 'pointer', color: 'text.secondary', display: 'flex' }}
           onClick={() => navigate(-1)}
@@ -302,6 +302,26 @@ export default function HospitalDetail() {
         </Box>
       )}
 
+      {/* Aviso: faturamento incompleto */}
+      {data?.missing_prices && data.missing_prices.length > 0 && (
+        <Box
+          sx={{
+            mb: 2.5,
+            p: 1.5,
+            border: '1px solid #f59e0b',
+            borderRadius: 2,
+            bgcolor: '#fffbeb',
+          }}
+        >
+          <Typography fontSize={12} fontWeight={700} color="#92400e">
+            ⚠ Faturamento incompleto — {data.missing_prices.length} especialidade(s) sem preço cadastrado nesta empresa.
+          </Typography>
+          <Typography fontSize={11} color="#78350f" mt={0.25}>
+            Cadastre os preços em "Preços & Fechamento" para incluir esses plantões.
+          </Typography>
+        </Box>
+      )}
+
       {/* Tabs */}
       <Tabs
         value={tab}
@@ -317,7 +337,13 @@ export default function HospitalDetail() {
       {tab === 0 && (
         <Paper
           elevation={0}
-          sx={{ border: '1px solid #e8eef2', borderRadius: 2, overflow: 'hidden' }}
+          sx={{
+            border: '1px solid #e8eef2',
+            borderRadius: 2,
+            overflow: 'hidden',
+            overflowX: 'auto',
+            '& > .MuiBox-root': { minWidth: 700 },
+          }}
         >
           {loading ? (
             <Box display="flex" justifyContent="center" p={3}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Box,
+  Button,
   Chip,
   IconButton,
   Paper,
@@ -378,6 +379,50 @@ export default function Financial() {
         </>
       ) : (
         <>
+          {/* ── Aviso: faturamento incompleto se faltar preço da empresa ── */}
+          {data.missing_prices && data.missing_prices.length > 0 && (
+            <Box
+              sx={{
+                mb: 2.5,
+                p: 2,
+                border: `1px solid #f59e0b`,
+                borderRadius: 2,
+                bgcolor: '#fffbeb',
+                display: 'flex',
+                gap: 1.5,
+                alignItems: 'flex-start',
+                flexDirection: { xs: 'column', sm: 'row' },
+              }}
+            >
+              <Box sx={{ flex: 1 }}>
+                <Typography fontSize={13} fontWeight={700} color="#92400e">
+                  Faturamento incompleto — {data.missing_prices.length}{' '}
+                  {data.missing_prices.length === 1
+                    ? 'especialidade'
+                    : 'especialidades'}{' '}
+                  sem preço cadastrado
+                </Typography>
+                <Typography fontSize={12} color="#78350f" mt={0.5}>
+                  Os plantões dessas especialidades não estão sendo contados
+                  no faturamento. Cadastre os preços na tela "Preços &
+                  Fechamento".
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => (window.location.href = '/precos')}
+                sx={{
+                  textTransform: 'none',
+                  borderColor: '#f59e0b',
+                  color: '#92400e',
+                  '&:hover': { borderColor: '#d97706', bgcolor: '#fef3c7' },
+                }}
+              >
+                Ir para preços
+              </Button>
+            </Box>
+          )}
           {/* ── KPIs ─────────────────────────────────────────────────── */}
           <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' }} gap={2} mb={2.5}>
             <KpiCard

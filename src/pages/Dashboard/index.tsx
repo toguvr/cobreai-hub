@@ -481,6 +481,7 @@ function HospitalCard({ hospital }: { hospital: HospitalSummary }) {
 
 export default function Dashboard() {
   const { current } = useEnterprise();
+  const navigate = useNavigate();
   const [monthKey, setMonthKey] = useState(() => toMonthKey(new Date()));
   const [hub, setHub] = useState<EnterpriseHub | null>(null);
   const [loading, setLoading] = useState(false);
@@ -581,6 +582,54 @@ export default function Dashboard() {
         </Paper>
       ) : (
         <>
+          {/* Aviso: faturamento incompleto se faltar preço da empresa */}
+          {hub.missing_prices && hub.missing_prices.length > 0 && (
+            <Box
+              sx={{
+                mb: 2.5,
+                p: 2,
+                border: `1px solid #f59e0b`,
+                borderRadius: 2,
+                bgcolor: '#fffbeb',
+                display: 'flex',
+                gap: 1.5,
+                alignItems: 'flex-start',
+                flexDirection: { xs: 'column', sm: 'row' },
+              }}
+            >
+              <Box sx={{ flex: 1 }}>
+                <Typography fontSize={13} fontWeight={700} color="#92400e">
+                  Faturamento incompleto — {hub.missing_prices.length}{' '}
+                  {hub.missing_prices.length === 1
+                    ? 'especialidade'
+                    : 'especialidades'}{' '}
+                  sem preço cadastrado
+                </Typography>
+                <Typography fontSize={12} color="#78350f" mt={0.5}>
+                  Plantões dessas especialidades não estão no faturamento.
+                  Cadastre os preços em "Preços & Fechamento".
+                </Typography>
+              </Box>
+              <Box
+                component="button"
+                onClick={() => navigate('/precos')}
+                sx={{
+                  cursor: 'pointer',
+                  border: '1px solid #f59e0b',
+                  bgcolor: 'transparent',
+                  color: '#92400e',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 1,
+                  '&:hover': { bgcolor: '#fef3c7' },
+                }}
+              >
+                Ir para preços
+              </Box>
+            </Box>
+          )}
           {/* Zona 1 — Hero */}
           <Box mb={2.5}>
             <HeroBalance

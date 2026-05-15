@@ -81,6 +81,15 @@ export interface EnterpriseHub {
 
   monthly_history: MonthlyPoint[];
   hospitals: HospitalSummary[];
+  missing_prices?: MissingPriceInfo[];
+}
+
+export interface MissingPriceInfo {
+  hospital_id: string;
+  hospital_name: string | null;
+  expertise_id: string;
+  expertise_name: string | null;
+  appointments_affected: number;
 }
 
 export interface DoctorSummary {
@@ -123,6 +132,7 @@ export interface HospitalDetail {
   };
   month_appointments: AppointmentSummary[];
   doctors: DoctorSummary[];
+  missing_prices?: MissingPriceInfo[];
 }
 
 export interface FinancialRow {
@@ -135,6 +145,7 @@ export interface FinancialRow {
 export interface FinancialData {
   rows: FinancialRow[];
   totals: { income: number; outcome: number };
+  missing_prices?: MissingPriceInfo[];
 }
 
 // ── Preços versionados da empresa ──────────────────────────────────────

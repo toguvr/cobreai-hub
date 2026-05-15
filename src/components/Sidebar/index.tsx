@@ -33,7 +33,17 @@ const navItems = [
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+  isMobile?: boolean;
+}
+
+export function Sidebar({
+  mobileOpen = false,
+  onMobileClose,
+  isMobile = false,
+}: SidebarProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut } = useAuth();
@@ -46,11 +56,17 @@ export function Sidebar() {
   const onDarkFaint = 'rgba(255,255,255,0.45)';
   const onDarkBorder = 'rgba(255,255,255,0.14)';
 
+  // No mobile, a sidebar vira temporary (gaveta); no desktop, permanent.
+  const drawerVariant = isMobile ? 'temporary' : 'permanent';
+
   return (
     <Drawer
-      variant="permanent"
+      variant={drawerVariant}
+      open={isMobile ? mobileOpen : true}
+      onClose={onMobileClose}
+      ModalProps={{ keepMounted: true }}
       sx={{
-        width: DRAWER_WIDTH,
+        width: isMobile ? 0 : DRAWER_WIDTH,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
           width: DRAWER_WIDTH,
@@ -145,7 +161,10 @@ export function Sidebar() {
           return (
             <ListItemButton
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path);
+                if (isMobile && onMobileClose) onMobileClose();
+              }}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
