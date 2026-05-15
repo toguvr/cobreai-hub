@@ -17,13 +17,11 @@ import {
   Paper,
   Skeleton,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -33,7 +31,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
-import LinkIcon from '@mui/icons-material/Link';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import SearchIcon from '@mui/icons-material/Search';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -93,9 +90,6 @@ function HospitalRow({
         {[hospital.cidade, hospital.uf].filter(Boolean).join(' / ') || '—'}
       </TableCell>
       <TableCell sx={{ fontSize: 12 }}>
-        {hospital.adminFee != null ? `${hospital.adminFee}%` : '—'}
-      </TableCell>
-      <TableCell sx={{ fontSize: 12 }}>
         {hospital.min_hours != null ? `${hospital.min_hours}h` : '—'}
       </TableCell>
       <TableCell align="right">
@@ -139,17 +133,12 @@ export default function Hospitals() {
   const { current } = useEnterprise();
   const brand = useBrand();
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [available, setAvailable] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Add dialog (com tabs)
+  // Add dialog — apenas cadastro de hospital novo (vínculo de hospital
+  // existente foi removido: a empresa não vincula hospitais).
   const [addOpen, setAddOpen] = useState(false);
-  const [addTab, setAddTab] = useState<'link' | 'create'>('link');
-
-  // Vincular existente
-  const [linkSearch, setLinkSearch] = useState('');
-  const [linkingId, setLinkingId] = useState<string | null>(null);
 
   // Cadastrar novo
   const [form, setForm] = useState<FormState>({});
@@ -175,31 +164,17 @@ export default function Hospitals() {
     }
   };
 
-  const loadAvailable = async () => {
-    if (!current?.id) return;
-    try {
-      const res = await api.get(`/enterprise/${current.id}/available-hospitals`);
-      setAvailable(res.data);
-    } catch {
-      toast.error('Erro ao buscar hospitais disponíveis.');
-    }
-  };
-
   useEffect(() => { load(); }, [current?.id]);
 
   const openAdd = () => {
     setForm({});
-    setLinkSearch('');
-    setAddTab('link');
     setEditMode('create');
-    loadAvailable();
     setAddOpen(true);
   };
 
   const openEdit = (h: Hospital) => {
     setForm({ ...h });
     setEditMode('edit');
-    setAddTab('create');
     setAddOpen(true);
   };
 
@@ -212,16 +187,6 @@ export default function Hospitals() {
       (h.uf || '').toLowerCase().includes(q),
     );
   }, [hospitals, search]);
-
-  const filteredAvailable = useMemo(() => {
-    const q = linkSearch.trim().toLowerCase();
-    if (!q) return available;
-    return available.filter(h =>
-      (h.name || '').toLowerCase().includes(q) ||
-      (h.cidade || '').toLowerCase().includes(q) ||
-      (h.uf || '').toLowerCase().includes(q),
-    );
-  }, [available, linkSearch]);
 
   const getCep = async () => {
     if (!form.cep || String(form.cep).replace(/\D/g, '').length < 8) return;
@@ -251,27 +216,6 @@ export default function Hospitals() {
       toast.error('Erro ao salvar hospital.');
     } finally {
       setSavingForm(false);
-    }
-  };
-
-  const handleLinkExisting = async (hospitalId: string) => {
-    if (!current?.id) return;
-    setLinkingId(hospitalId);
-    try {
-      await api.post('/enterprise-hospital', {
-        enterprise_id: current.id,
-        hospital_id: hospitalId,
-      });
-      toast.success('Hospital vinculado!');
-      setAddOpen(false);
-      load();
-    } catch (err: any) {
-      const msg = err?.response?.status === 409
-        ? 'Este hospital já está vinculado.'
-        : err?.response?.data?.message || 'Erro ao vincular.';
-      toast.error(msg);
-    } finally {
-      setLinkingId(null);
     }
   };
 
@@ -362,7 +306,7 @@ export default function Hospitals() {
             <TableHead sx={{ bgcolor: '#f8fafc' }}>
               <TableRow>
                 <TableCell />
-                {['Hospital', 'Cidade / UF', 'Taxa admin', 'Mín. horas'].map(h => (
+                {['Hospital', 'Cidade / UF', 'Mín. horas'].map(h => (
                   <TableCell key={h} sx={{ fontWeight: 700, fontSize: 11, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                     {h}
                   </TableCell>
@@ -373,7 +317,7 @@ export default function Hospitals() {
             <TableBody>
               {filteredHospitals.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                  <TableCell colSpan={5} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                     {search ? 'Nenhum hospital encontrado.' : 'Nenhum hospital vinculado a esta organização.'}
                   </TableCell>
                 </TableRow>
@@ -394,140 +338,24 @@ export default function Hospitals() {
         )}
       </Paper>
 
-      {/* Modal Adicionar (Tabs: Vincular / Cadastrar) */}
+      {/* Modal Adicionar / Editar hospital */}
       <Dialog
         open={addOpen}
-        onClose={() => !savingForm && !linkingId && setAddOpen(false)}
+        onClose={() => !savingForm && setAddOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle fontWeight={700} sx={{ pb: 0 }}>
-          {editMode === 'edit' ? 'Editar hospital' : 'Adicionar hospital'}
+        <DialogTitle fontWeight={700}>
+          {editMode === 'edit' ? 'Editar hospital' : 'Cadastrar hospital'}
         </DialogTitle>
 
-        {editMode === 'create' && (
-          <Tabs
-            value={addTab}
-            onChange={(_, v) => setAddTab(v)}
-            sx={{ px: 3, borderBottom: `1px solid ${C.border}` }}
-          >
-            <Tab
-              value="link"
-              label={(
-                <Box display="flex" alignItems="center" gap={1}>
-                  <LinkIcon sx={{ fontSize: 16 }} />
-                  <Typography fontSize={13} fontWeight={600}>Vincular existente</Typography>
-                </Box>
-              )}
-              sx={{ textTransform: 'none', minHeight: 48 }}
-            />
-            <Tab
-              value="create"
-              label={(
-                <Box display="flex" alignItems="center" gap={1}>
-                  <AddIcon sx={{ fontSize: 16 }} />
-                  <Typography fontSize={13} fontWeight={600}>Cadastrar novo</Typography>
-                </Box>
-              )}
-              sx={{ textTransform: 'none', minHeight: 48 }}
-            />
-          </Tabs>
-        )}
-
         <DialogContent sx={{ pt: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {addTab === 'link' && editMode === 'create' && (
-            <>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Buscar hospital..."
-                value={linkSearch}
-                onChange={e => setLinkSearch(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 18, color: C.textMuted }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Box sx={{ maxHeight: 360, overflowY: 'auto' }}>
-                {filteredAvailable.length === 0 ? (
-                  <Box textAlign="center" py={4}>
-                    <Typography fontSize={13} color="text.secondary">
-                      {linkSearch
-                        ? 'Nenhum hospital encontrado.'
-                        : 'Não há hospitais disponíveis para vincular.'}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <Stack spacing={1}>
-                    {filteredAvailable.map(h => (
-                      <Paper
-                        key={h.id}
-                        elevation={0}
-                        sx={{
-                          p: 1.5,
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 2,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1.5,
-                          transition: 'border-color 0.12s',
-                          '&:hover': { borderColor: brand.primary },
-                        }}
-                      >
-                        <Avatar
-                          src={h.logo_url}
-                          variant="rounded"
-                          sx={{ width: 32, height: 32, bgcolor: brand.primarySoft }}
-                        >
-                          <LocalHospitalIcon sx={{ color: brand.primary, fontSize: 16 }} />
-                        </Avatar>
-                        <Box flex={1} minWidth={0}>
-                          <Typography fontSize={13} fontWeight={600} noWrap>
-                            {h.name}
-                          </Typography>
-                          <Typography fontSize={11} color="text.secondary" noWrap>
-                            {[h.cidade, h.uf].filter(Boolean).join(' / ') || '—'}
-                          </Typography>
-                        </Box>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={!!linkingId}
-                          onClick={() => handleLinkExisting(h.id)}
-                          startIcon={
-                            linkingId === h.id
-                              ? <CircularProgress size={12} />
-                              : <LinkIcon sx={{ fontSize: 14 }} />
-                          }
-                          sx={{
-                            borderColor: brand.primary,
-                            color: brand.primary,
-                            '&:hover': { borderColor: brand.primaryDark, bgcolor: brand.primarySoft },
-                          }}
-                        >
-                          Vincular
-                        </Button>
-                      </Paper>
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            </>
-          )}
-
-          {(addTab === 'create' || editMode === 'edit') && (
+          {(
             <>
               <TextField label="Nome do hospital" size="small" fullWidth {...field('name')} autoFocus />
               <Box display="flex" gap={2}>
                 <TextField label="Mín. horas" size="small" type="number" fullWidth {...field('min_hours')} />
                 <TextField label="Tolerância (min)" size="small" type="number" fullWidth {...field('min_tolerance')} />
-              </Box>
-              <Box display="flex" gap={2}>
-                <TextField label="Taxa admin (%)" size="small" type="number" fullWidth {...field('adminFee')} />
-                <TextField label="Imposto (%)" size="small" type="number" fullWidth {...field('tax')} />
               </Box>
               <TextField label="CEP" size="small" fullWidth {...field('cep')} onBlur={getCep} />
               <TextField label="Rua" size="small" fullWidth {...field('logradouro')} />
@@ -546,19 +374,17 @@ export default function Hospitals() {
 
         <Divider />
         <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button onClick={() => setAddOpen(false)} disabled={savingForm || !!linkingId}>
-            {addTab === 'link' && editMode === 'create' ? 'Fechar' : 'Cancelar'}
+          <Button onClick={() => setAddOpen(false)} disabled={savingForm}>
+            Cancelar
           </Button>
-          {(addTab === 'create' || editMode === 'edit') && (
-            <Button
-              variant="contained"
-              onClick={handleSaveForm}
-              disabled={savingForm}
-              startIcon={savingForm ? <CircularProgress size={14} color="inherit" /> : undefined}
-            >
-              {editMode === 'edit' ? 'Salvar' : 'Cadastrar e vincular'}
-            </Button>
-          )}
+          <Button
+            variant="contained"
+            onClick={handleSaveForm}
+            disabled={savingForm}
+            startIcon={savingForm ? <CircularProgress size={14} color="inherit" /> : undefined}
+          >
+            {editMode === 'edit' ? 'Salvar' : 'Cadastrar'}
+          </Button>
         </DialogActions>
       </Dialog>
 

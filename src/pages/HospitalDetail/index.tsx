@@ -502,8 +502,6 @@ export default function HospitalDetail() {
             gap={2}
           >
             {[
-              { label: 'Taxa Admin', value: `${hospital.adminFee}%` },
-              { label: 'Imposto', value: `${hospital.tax}%` },
               { label: 'Mín. horas', value: hospital.min_hours ? `${hospital.min_hours}h` : '—' },
               { label: 'Tolerância', value: `${hospital.min_tolerance}min` },
               { label: 'CEP', value: hospital.cep || '—' },
