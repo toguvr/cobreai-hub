@@ -163,6 +163,20 @@ export default function HospitalDetail() {
     load(month);
   }, [current?.id, hospital_id, month]);
 
+  // Calendário: grade do mês + jornadas agrupadas por dia.
+  // IMPORTANTE: hooks antes de qualquer return condicional (Rules of Hooks).
+  const monthGrid = useMemo(() => buildMonthGrid(month), [month]);
+  const apptsByDay = useMemo(() => {
+    const map = new Map<string, AppointmentSummary[]>();
+    (data?.month_appointments ?? []).forEach(a => {
+      const key = dateKey(a.date);
+      const list = map.get(key) ?? [];
+      list.push(a);
+      map.set(key, list);
+    });
+    return map;
+  }, [data]);
+
   if (loading && !data) {
     return (
       <PrivateLayout>
@@ -175,19 +189,6 @@ export default function HospitalDetail() {
 
   const hospital = data?.hospital;
   const kpis = data?.kpis;
-
-  // Calendário: grade do mês + jornadas agrupadas por dia
-  const monthGrid = useMemo(() => buildMonthGrid(month), [month]);
-  const apptsByDay = useMemo(() => {
-    const map = new Map<string, AppointmentSummary[]>();
-    (data?.month_appointments ?? []).forEach(a => {
-      const key = dateKey(a.date);
-      const list = map.get(key) ?? [];
-      list.push(a);
-      map.set(key, list);
-    });
-    return map;
-  }, [data]);
   const [refYear, refMonth] = month.split('-').map(Number);
 
   return (
