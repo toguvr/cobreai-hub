@@ -5,6 +5,9 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Divider,
+  Drawer,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -18,6 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import PeopleIcon from '@mui/icons-material/People';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -158,6 +162,8 @@ export default function HospitalDetail() {
   // Escala: visão mês (grade) ou semana (drill-down ao clicar num dia)
   const [scheduleView, setScheduleView] = useState<'month' | 'week'>('month');
   const [weekAnchor, setWeekAnchor] = useState<Date>(() => new Date());
+  // Jornada selecionada → drawer de detalhes
+  const [detail, setDetail] = useState<AppointmentSummary | null>(null);
 
   const load = async (selectedMonth: string) => {
     if (!current?.id || !hospital_id) return;
@@ -464,6 +470,10 @@ export default function HospitalDetail() {
                                 }h`}
                               >
                                 <Box
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    setDetail(a);
+                                  }}
                                   sx={{
                                     bgcolor: open ? '#FEEBC8' : c.bg,
                                     borderLeft: `3px solid ${
@@ -474,6 +484,8 @@ export default function HospitalDetail() {
                                     py: 0.25,
                                     mb: 0.25,
                                     overflow: 'hidden',
+                                    cursor: 'pointer',
+                                    '&:hover': { filter: 'brightness(0.96)' },
                                   }}
                                 >
                                   <Typography
@@ -545,6 +557,7 @@ export default function HospitalDetail() {
                             return (
                               <Box
                                 key={a.id}
+                                onClick={() => setDetail(a)}
                                 sx={{
                                   bgcolor: open ? '#FEEBC8' : c.bg,
                                   borderLeft: `3px solid ${
@@ -554,6 +567,9 @@ export default function HospitalDetail() {
                                   px: 0.75,
                                   py: 0.5,
                                   mb: 0.5,
+                                  cursor: 'pointer',
+                                  transition: 'filter 0.12s',
+                                  '&:hover': { filter: 'brightness(0.96)' },
                                 }}
                               >
                                 <Typography
@@ -688,6 +704,139 @@ export default function HospitalDetail() {
           </Box>
         </Paper>
       )}
+
+      {/* Drawer de detalhes da jornada */}
+      <Drawer
+        anchor="right"
+        open={Boolean(detail)}
+        onClose={() => setDetail(null)}
+      >
+        {detail && (() => {
+          const c = expertiseColor(detail.expertise_name);
+          const open = !detail.doctor_name;
+          const start = new Date(detail.date);
+          const end = new Date(start.getTime() + detail.duration * 3600000);
+          return (
+            <Box sx={{ width: 340, p: 3 }}>
+              <Box
+                display="flex"
+                alignItems="center"
+                justifyContent="space-between"
+                mb={2}
+              >
+                <Typography fontSize={15} fontWeight={700}>
+                  Detalhes da jornada
+                </Typography>
+                <IconButton size="small" onClick={() => setDetail(null)}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              <Box
+                sx={{
+                  bgcolor: open ? '#FEEBC8' : c.bg,
+                  borderLeft: `4px solid ${open ? '#ED8936' : c.border}`,
+                  borderRadius: 1,
+                  p: 2,
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  fontSize={11}
+                  fontWeight={700}
+                  color={open ? '#9C4221' : c.fg}
+                  sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                >
+                  {detail.expertise_name ?? 'Especialidade'}
+                </Typography>
+                <Typography
+                  fontSize={18}
+                  fontWeight={700}
+                  color={open ? '#9C4221' : c.fg}
+                  mt={0.5}
+                  sx={{ fontStyle: open ? 'italic' : 'normal' }}
+                >
+                  {detail.doctor_name ?? 'Em aberto'}
+                </Typography>
+                <Typography fontSize={12} color={open ? '#9C4221' : c.fg} sx={{ opacity: 0.75 }}>
+                  Plantão {detail.title}
+                </Typography>
+              </Box>
+
+              <Box display="flex" flexDirection="column" gap={1.75}>
+                <Box>
+                  <Typography
+                    fontSize={10}
+                    fontWeight={700}
+                    color="text.secondary"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                  >
+                    Data
+                  </Typography>
+                  <Typography fontSize={14} sx={{ textTransform: 'capitalize' }}>
+                    {start.toLocaleDateString('pt-BR', {
+                      weekday: 'long',
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    fontSize={10}
+                    fontWeight={700}
+                    color="text.secondary"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                  >
+                    Horário
+                  </Typography>
+                  <Typography fontSize={14}>
+                    {hourLabel(detail.date)} – {hourLabel(end.toISOString())} (
+                    {detail.duration}h)
+                  </Typography>
+                </Box>
+
+                <Divider />
+
+                <Box>
+                  <Typography
+                    fontSize={10}
+                    fontWeight={700}
+                    color="text.secondary"
+                    sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
+                  >
+                    Check-in / Check-out
+                  </Typography>
+                  <Box display="flex" gap={3} mt={0.5}>
+                    <Box>
+                      <Typography fontSize={11} color="text.secondary">
+                        Entrada
+                      </Typography>
+                      <Typography fontSize={14} fontWeight={600}>
+                        {detail.start_checkin
+                          ? hourLabel(detail.start_checkin)
+                          : '—'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography fontSize={11} color="text.secondary">
+                        Saída
+                      </Typography>
+                      <Typography fontSize={14} fontWeight={600}>
+                        {detail.stop_checkin
+                          ? hourLabel(detail.stop_checkin)
+                          : '—'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          );
+        })()}
+      </Drawer>
     </PrivateLayout>
   );
 }
