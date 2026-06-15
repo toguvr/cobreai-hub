@@ -213,7 +213,7 @@ export interface EnterpriseClosingMissing {
 }
 
 export interface EnterpriseClosingData {
-  status: 'ok' | 'incomplete' | 'empty';
+  status: 'ok' | 'partial' | 'incomplete' | 'empty';
   month: string;
   rows: EnterpriseClosingRow[];
   totals: { bruto: number; liquido: number; appointments: number };

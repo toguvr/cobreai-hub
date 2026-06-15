@@ -583,74 +583,84 @@ export default function Prices() {
               <Skeleton variant="rounded" height={200} />
             )}
 
-            {/* Estado: incompleto → bloqueia */}
-            {closing?.status === 'incomplete' && (
-              <Paper
-                sx={{
-                  p: 3,
-                  border: `1px solid ${C.amber}33`,
-                  bgcolor: C.amberSoft,
-                  borderRadius: 2,
-                }}
-              >
-                <Stack direction="row" gap={1.5} alignItems="flex-start">
-                  <WarningAmberIcon sx={{ color: C.amber }} />
-                  <Box flex={1}>
-                    <Typography fontWeight={700} color={C.amber} mb={0.5}>
-                      Fechamento bloqueado — preços faltando
-                    </Typography>
-                    <Typography fontSize={13} color={C.textMuted} mb={1.5}>
-                      Cadastre o preço das especialidades abaixo (na aba
-                      "Tabela de preços") para liberar o fechamento de{' '}
-                      {monthLabel(monthKey)}.
-                    </Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
-                            HOSPITAL
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
-                            ESPECIALIDADE
-                          </TableCell>
-                          <TableCell
-                            align="right"
-                            sx={{ fontWeight: 700, fontSize: 11 }}
-                          >
-                            PLANTÕES AFETADOS
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {closing.missing.map(m => (
-                          <TableRow
-                            key={`${m.hospital_id}-${m.expertise_id}`}
-                          >
-                            <TableCell sx={{ fontSize: 13 }}>
-                              {m.hospital_name ?? '—'}
+            {/* Banner de pendências — aparece em 'partial' e 'incomplete'.
+                Em 'partial' o fechamento dos hospitais OK segue sendo
+                exibido logo abaixo. */}
+            {closing &&
+              (closing.status === 'incomplete' ||
+                closing.status === 'partial') &&
+              closing.missing.length > 0 && (
+                <Paper
+                  sx={{
+                    p: 3,
+                    mb: 2,
+                    border: `1px solid ${C.amber}33`,
+                    bgcolor: C.amberSoft,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Stack direction="row" gap={1.5} alignItems="flex-start">
+                    <WarningAmberIcon sx={{ color: C.amber }} />
+                    <Box flex={1}>
+                      <Typography fontWeight={700} color={C.amber} mb={0.5}>
+                        {closing.status === 'incomplete'
+                          ? 'Sem preços cadastrados — fechamento pendente'
+                          : `Pendência em ${closing.missing.length} especialidade${
+                              closing.missing.length === 1 ? '' : 's'
+                            }`}
+                      </Typography>
+                      <Typography fontSize={13} color={C.textMuted} mb={1.5}>
+                        {closing.status === 'incomplete'
+                          ? `Cadastre o preço das especialidades abaixo (na aba "Tabela de preços") para fechar ${monthLabel(monthKey)}.`
+                          : `Os hospitais e especialidades já com preço estão fechados normalmente. Cadastre os preços abaixo pra completar ${monthLabel(monthKey)}.`}
+                      </Typography>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
+                              HOSPITAL
                             </TableCell>
-                            <TableCell sx={{ fontSize: 13 }}>
-                              {m.expertise_name ?? '—'}
+                            <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
+                              ESPECIALIDADE
                             </TableCell>
-                            <TableCell align="right" sx={{ fontSize: 13 }}>
-                              {m.appointments_affected}
+                            <TableCell
+                              align="right"
+                              sx={{ fontWeight: 700, fontSize: 11 }}
+                            >
+                              PLANTÕES AFETADOS
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      sx={{ mt: 2, textTransform: 'none' }}
-                      onClick={() => setTab(0)}
-                    >
-                      Ir para a tabela de preços
-                    </Button>
-                  </Box>
-                </Stack>
-              </Paper>
-            )}
+                        </TableHead>
+                        <TableBody>
+                          {closing.missing.map(m => (
+                            <TableRow
+                              key={`${m.hospital_id}-${m.expertise_id}`}
+                            >
+                              <TableCell sx={{ fontSize: 13 }}>
+                                {m.hospital_name ?? '—'}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: 13 }}>
+                                {m.expertise_name ?? '—'}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontSize: 13 }}>
+                                {m.appointments_affected}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        sx={{ mt: 2, textTransform: 'none' }}
+                        onClick={() => setTab(0)}
+                      >
+                        Ir para a tabela de preços
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Paper>
+              )}
 
             {/* Estado: vazio */}
             {closing?.status === 'empty' && (
@@ -668,8 +678,9 @@ export default function Prices() {
               </Paper>
             )}
 
-            {/* Estado: ok → fechamento */}
-            {closing?.status === 'ok' && (
+            {/* Fechamento: aparece sempre que houver rows (status ok ou partial) */}
+            {closing &&
+              (closing.status === 'ok' || closing.status === 'partial') && (
               <Box>
                 <Stack
                   direction="row"
