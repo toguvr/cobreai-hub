@@ -12,13 +12,13 @@ export interface BrandTokens {
 }
 
 const DEFAULT: BrandTokens = {
-  primary: '#1a6b4a',
-  primaryDark: '#0f3d29',
-  primarySoft: '#e8f5ee',
+  primary: '#4E9594',
+  primaryDark: '#195460',
+  primarySoft: '#EBFEFA',
   primaryContrast: '#ffffff',
   secondary: null,
-  logo: null,
-  title: 'Dr. Plantão Hub',
+  logo: '/cobreai-logo.png',
+  title: 'Cobreai Hub',
 };
 
 // ─── Helpers de cor (sem libs externas) ──────────────────────────────────
