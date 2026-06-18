@@ -61,7 +61,7 @@ export default function Login() {
             color="primary.dark"
             letterSpacing={-0.5}
           >
-            Dr. Plantão
+            Cobreai
           </Typography>
           <Typography variant="body2" color="text.secondary" mt={0.5}>
             Hub de Gestão de Organizações

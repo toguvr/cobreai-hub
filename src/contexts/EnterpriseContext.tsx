@@ -12,7 +12,7 @@ interface EnterpriseContextData {
   refresh(): void;
 }
 
-const STORAGE_KEY = '@DrPlantaoHub:enterprise';
+const STORAGE_KEY = '@CobreaiHub:enterprise';
 
 const EnterpriseContext = createContext<EnterpriseContextData>(
   {} as EnterpriseContextData,

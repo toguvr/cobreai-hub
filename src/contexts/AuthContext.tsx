@@ -22,10 +22,31 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
+const STORAGE_PREFIX = '@CobreaiHub';
+const LEGACY_PREFIX = '@DrPlantaoHub';
+const KEYS = ['token', 'user', 'enterprise'] as const;
+
+/**
+ * Migra chaves do localStorage do prefixo antigo (@DrPlantaoHub) pro novo
+ * (@CobreaiHub) na primeira inicialização — evita deslogar usuários que já
+ * estavam logados no momento do rebranding.
+ */
+function migrateLegacyKeys() {
+  for (const key of KEYS) {
+    const newKey = `${STORAGE_PREFIX}:${key}`;
+    const oldKey = `${LEGACY_PREFIX}:${key}`;
+    if (!localStorage.getItem(newKey) && localStorage.getItem(oldKey)) {
+      localStorage.setItem(newKey, localStorage.getItem(oldKey)!);
+    }
+    if (localStorage.getItem(oldKey)) localStorage.removeItem(oldKey);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AuthState>(() => {
-    const token = localStorage.getItem('@DrPlantaoHub:token');
-    const user = localStorage.getItem('@DrPlantaoHub:user');
+    migrateLegacyKeys();
+    const token = localStorage.getItem(`${STORAGE_PREFIX}:token`);
+    const user = localStorage.getItem(`${STORAGE_PREFIX}:user`);
 
     if (token && user) {
       return { token, user: JSON.parse(user) };
@@ -50,16 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     }
 
-    localStorage.setItem('@DrPlantaoHub:token', token);
-    localStorage.setItem('@DrPlantaoHub:user', JSON.stringify(user));
+    localStorage.setItem(`${STORAGE_PREFIX}:token`, token);
+    localStorage.setItem(`${STORAGE_PREFIX}:user`, JSON.stringify(user));
 
     setData({ token, user });
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem('@DrPlantaoHub:token');
-    localStorage.removeItem('@DrPlantaoHub:user');
-    localStorage.removeItem('@DrPlantaoHub:enterprise');
+    for (const key of KEYS) {
+      localStorage.removeItem(`${STORAGE_PREFIX}:${key}`);
+    }
     setData({} as AuthState);
   }, []);
 
