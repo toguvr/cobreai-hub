@@ -54,16 +54,26 @@ export default function Login() {
         sx={{ p: 4, width: '100%', maxWidth: 400, borderRadius: 3 }}
       >
         {/* Logo / branding */}
-        <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Typography
-            variant="h5"
-            fontWeight={700}
-            color="primary.dark"
-            letterSpacing={-0.5}
-          >
-            Cobreai
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
+        <Box
+          sx={{
+            mb: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <Box
+            component="img"
+            src="/cobreai-login.png"
+            alt="Cobreai"
+            sx={{
+              width: '100%',
+              maxWidth: 220,
+              height: 'auto',
+              display: 'block',
+            }}
+          />
+          <Typography variant="body2" color="text.secondary" mt={1.5}>
             Hub de Gestão de Organizações
           </Typography>
         </Box>
