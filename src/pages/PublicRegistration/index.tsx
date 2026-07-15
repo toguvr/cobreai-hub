@@ -130,6 +130,39 @@ const birthdayToISO = (masked: string): string | undefined => {
 const isBirthdayValid = (masked: string): boolean =>
   !masked || !!birthdayToISO(masked);
 
+// ── Validadores ────────────────────────────────────────────────
+// CPF: algoritmo oficial da Receita — 11 dígitos + 2 dígitos
+// verificadores. Rejeita sequências repetidas (000..., 111..., etc.).
+const isValidCPF = (masked: string): boolean => {
+  const d = onlyDigits(masked);
+  if (d.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(d)) return false;
+
+  const calcDigit = (base: string, factorStart: number): number => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) {
+      sum += parseInt(base[i], 10) * (factorStart - i);
+    }
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+
+  const digit1 = calcDigit(d.slice(0, 9), 10);
+  if (digit1 !== parseInt(d[9], 10)) return false;
+  const digit2 = calcDigit(d.slice(0, 10), 11);
+  if (digit2 !== parseInt(d[10], 10)) return false;
+  return true;
+};
+
+// RG não tem padrão nacional (cada estado emissor faz o seu). O
+// máximo que dá pra fazer sem UF do documento é exigir uma
+// quantidade mínima e máxima de caracteres alfanuméricos. Aceita
+// letras (SP usa "X" como dígito verificador).
+const isValidRG = (raw: string): boolean => {
+  const cleaned = raw.replace(/[^a-zA-Z0-9]/g, '');
+  return cleaned.length >= 5 && cleaned.length <= 14;
+};
+
 type FieldStatus = 'idle' | 'checking' | 'ok' | 'taken';
 
 interface FieldErrors {
@@ -388,7 +421,18 @@ export default function PublicRegistration() {
 
   const canGoNext = () => {
     if (step === 0) return contactValid && !hasTakenField(['email', 'cellphone']);
-    if (step === 1) return !hasTakenField(['cpf', 'rg', 'crm', 'sus']);
+    if (step === 1) {
+      if (hasTakenField(['cpf', 'rg', 'crm', 'sus'])) return false;
+      // Se digitou CPF, precisa ser válido (11 dígitos + checksum).
+      const cpfDigits = onlyDigits(form.cpf);
+      if (cpfDigits.length > 0 && !isValidCPF(form.cpf)) return false;
+      // Se digitou RG, precisa ter tamanho mínimo.
+      if (form.rg.length > 0 && !isValidRG(form.rg)) return false;
+      // Nascimento com 10 chars precisa ser data válida.
+      if (form.birthday.length === 10 && !isBirthdayValid(form.birthday))
+        return false;
+      return true;
+    }
     if (step === 3) return docsValid;
     return true;
   };
@@ -590,37 +634,58 @@ export default function PublicRegistration() {
                 </Alert>
               )}
 
-              {needsField('cpf') && (
-                <TextField
-                  label="CPF"
-                  fullWidth
-                  value={form.cpf}
-                  onChange={e => {
-                    const masked = maskCPF(e.target.value);
-                    set('cpf', masked);
-                    debouncedCheckField('cpf', onlyDigits(masked));
-                  }}
-                  onBlur={() => checkField('cpf', onlyDigits(form.cpf))}
-                  placeholder="000.000.000-00"
-                  inputProps={{ inputMode: 'numeric', maxLength: 14 }}
-                  error={errorFor('cpf')}
-                  helperText={helperFor('cpf')}
-                />
-              )}
-              {needsField('rg') && (
-                <TextField
-                  label="RG"
-                  fullWidth
-                  value={form.rg}
-                  onChange={e => {
-                    set('rg', e.target.value);
-                    debouncedCheckField('rg', e.target.value);
-                  }}
-                  onBlur={() => checkField('rg', form.rg)}
-                  error={errorFor('rg')}
-                  helperText={helperFor('rg')}
-                />
-              )}
+              {needsField('cpf') && (() => {
+                // Só marca erro depois que o campo tem os 11 dígitos —
+                // enquanto digita não mostra "inválido".
+                const cpfDigits = onlyDigits(form.cpf);
+                const cpfBadChecksum =
+                  cpfDigits.length === 11 && !isValidCPF(form.cpf);
+                const takenErr = errorFor('cpf');
+                return (
+                  <TextField
+                    label="CPF"
+                    fullWidth
+                    value={form.cpf}
+                    onChange={e => {
+                      const masked = maskCPF(e.target.value);
+                      set('cpf', masked);
+                      debouncedCheckField('cpf', onlyDigits(masked));
+                    }}
+                    onBlur={() => checkField('cpf', onlyDigits(form.cpf))}
+                    placeholder="000.000.000-00"
+                    inputProps={{ inputMode: 'numeric', maxLength: 14 }}
+                    error={takenErr || cpfBadChecksum}
+                    helperText={
+                      cpfBadChecksum
+                        ? 'CPF inválido — confira os dígitos.'
+                        : helperFor('cpf')
+                    }
+                  />
+                );
+              })()}
+              {needsField('rg') && (() => {
+                const rgBadFormat = form.rg.length > 0 && !isValidRG(form.rg);
+                const takenErr = errorFor('rg');
+                return (
+                  <TextField
+                    label="RG"
+                    fullWidth
+                    value={form.rg}
+                    onChange={e => {
+                      set('rg', e.target.value);
+                      debouncedCheckField('rg', e.target.value);
+                    }}
+                    onBlur={() => checkField('rg', form.rg)}
+                    inputProps={{ maxLength: 20 }}
+                    error={takenErr || rgBadFormat}
+                    helperText={
+                      rgBadFormat
+                        ? 'RG deve ter entre 5 e 14 caracteres.'
+                        : helperFor('rg')
+                    }
+                  />
+                );
+              })()}
               {needsField('crm') && (
                 <TextField
                   label="CRM"
