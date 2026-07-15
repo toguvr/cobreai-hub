@@ -314,13 +314,28 @@ export default function PublicRegistration() {
   const debouncedCheckField = useDebouncedCallback(checkField, 400);
   const debouncedCep = useDebouncedCallback(lookupCep, 400);
 
+  const needsField = (f: UserField): boolean => {
+    // Se não veio de conta existente, sempre pede.
+    if (!emailFoundExisting) return true;
+    return emailMissingFields.includes(f);
+  };
+
+  // Regras da etapa 0:
+  // - E-mail sempre obrigatório e válido.
+  // - Se a conta já existe (emailFoundExisting), nome e celular são
+  //   opcionais aqui — o back reaproveita.
+  // - Se é conta nova, exige nome e celular válidos.
+  // - Nenhum campo unique pode estar 'taken' — mas 'taken' pra e-mail
+  //   nunca acontece (reaproveitamos), só bloqueia se o campo estiver
+  //   com problema real.
   const contactValid =
-    form.name.trim().length > 2 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
-    onlyDigits(form.cellphone).length >= 10 &&
     fieldStatus.email !== 'checking' &&
-    fieldStatus.cellphone !== 'taken' &&
-    fieldStatus.email !== 'taken';
+    fieldStatus.email !== 'taken' &&
+    (emailFoundExisting || form.name.trim().length > 2) &&
+    (!needsField('cellphone') ||
+      (onlyDigits(form.cellphone).length >= 10 &&
+        fieldStatus.cellphone !== 'taken'));
 
   const docsValid = requiredDocs.every(d => files[d.id]);
 
@@ -332,12 +347,6 @@ export default function PublicRegistration() {
     if (step === 1) return !hasTakenField(['cpf', 'rg', 'crm', 'sus']);
     if (step === 3) return docsValid;
     return true;
-  };
-
-  const needsField = (f: UserField): boolean => {
-    // Se não veio de conta existente, sempre pede.
-    if (!emailFoundExisting) return true;
-    return emailMissingFields.includes(f);
   };
 
   const handleFilePick = (docTypeId: string, file: File | null) => {
@@ -466,16 +475,15 @@ export default function PublicRegistration() {
           {step === 0 && (
             <Stack gap={2}>
               <Typography fontWeight={600}>Contato</Typography>
-              <TextField
-                label="Nome completo"
-                fullWidth
-                value={form.name}
-                onChange={e => set('name', e.target.value)}
-              />
+
+              {/* E-mail vem primeiro pra o back detectar conta existente
+                  e o formulário poder pular os campos que já estão
+                  preenchidos (nome, celular, docs, endereço). */}
               <TextField
                 label="E-mail"
                 type="email"
                 fullWidth
+                autoFocus
                 value={form.email}
                 onChange={e => {
                   const v = e.target.value.trim();
@@ -492,6 +500,18 @@ export default function PublicRegistration() {
                   pedir só os dados que ainda faltam.
                 </Alert>
               )}
+
+              {/* Nome só é pedido quando a conta é nova — se o e-mail já
+                  existe, o back reaproveita o nome atual do user. */}
+              {!emailFoundExisting && (
+                <TextField
+                  label="Nome completo"
+                  fullWidth
+                  value={form.name}
+                  onChange={e => set('name', e.target.value)}
+                />
+              )}
+
               {needsField('cellphone') && (
                 <TextField
                   label="Celular (com DDD)"
