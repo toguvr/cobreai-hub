@@ -15,6 +15,9 @@ import Users from './pages/Users';
 import Financial from './pages/Financial';
 import Prices from './pages/Prices';
 import Settings from './pages/Settings';
+import Documents from './pages/Documents';
+import Registrations from './pages/Registrations';
+import PublicRegistration from './pages/PublicRegistration';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -86,6 +89,29 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route
+        path="/documentos"
+        element={
+          <PrivateRoute>
+            <Documents />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/credenciamento"
+        element={
+          <PrivateRoute>
+            <Registrations />
+          </PrivateRoute>
+        }
+      />
+
+      {/* Rota PÚBLICA — sem auth. Cadastro do médico na empresa. */}
+      <Route
+        path="/credenciamento/:enterprise_id/etapa1"
+        element={<PublicRegistration />}
+      />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
