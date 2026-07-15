@@ -64,6 +64,72 @@ const EMPTY_FORM: FormData = {
 
 const STEPS = ['Contato', 'Documentos pessoais', 'Endereço', 'Anexos', 'Envio'];
 
+// ── Máscaras ─────────────────────────────────────────────────────
+// Todas as máscaras trabalham com string livre — o form guarda o
+// valor JÁ MASCARADO. Só na hora do submit chamamos onlyDigits.
+
+const onlyDigits = (v: string): string => v.replace(/\D/g, '');
+
+const maskCellphone = (v: string): string => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+};
+
+const maskCPF = (v: string): string => {
+  const d = onlyDigits(v).slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
+const maskCNS = (v: string): string => {
+  const d = onlyDigits(v).slice(0, 15);
+  // formato "### #### #### ####"
+  const parts: string[] = [];
+  if (d.length > 0) parts.push(d.slice(0, 3));
+  if (d.length > 3) parts.push(d.slice(3, 7));
+  if (d.length > 7) parts.push(d.slice(7, 11));
+  if (d.length > 11) parts.push(d.slice(11, 15));
+  return parts.join(' ');
+};
+
+const maskCEP = (v: string): string => {
+  const d = onlyDigits(v).slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+};
+
+// DD/MM/AAAA — o usuário digita só dígitos, a máscara insere / na
+// hora certa. Convertemos pra ISO (yyyy-mm-dd) no submit.
+const maskBirthday = (v: string): string => {
+  const d = onlyDigits(v).slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+};
+
+/** Retorna yyyy-mm-dd (formato do back) ou undefined se inválido. */
+const birthdayToISO = (masked: string): string | undefined => {
+  const m = masked.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return undefined;
+  const [, dd, mm, yyyy] = m;
+  const d = Number(dd);
+  const mo = Number(mm);
+  const y = Number(yyyy);
+  // sanidade: 1900 < ano < ano atual, mês 1-12, dia 1-31
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return undefined;
+  const now = new Date();
+  if (y < 1900 || y > now.getFullYear()) return undefined;
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const isBirthdayValid = (masked: string): boolean =>
+  !masked || !!birthdayToISO(masked);
+
 type FieldStatus = 'idle' | 'checking' | 'ok' | 'taken';
 
 interface FieldErrors {
@@ -251,7 +317,7 @@ export default function PublicRegistration() {
   const contactValid =
     form.name.trim().length > 2 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
-    form.cellphone.replace(/\D/g, '').length >= 10 &&
+    onlyDigits(form.cellphone).length >= 10 &&
     fieldStatus.email !== 'checking' &&
     fieldStatus.cellphone !== 'taken' &&
     fieldStatus.email !== 'taken';
@@ -291,13 +357,15 @@ export default function PublicRegistration() {
       const payload = {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
-        cellphone: form.cellphone.replace(/\D/g, ''),
-        cpf: form.cpf.replace(/\D/g, '') || undefined,
+        cellphone: onlyDigits(form.cellphone),
+        cpf: onlyDigits(form.cpf) || undefined,
         rg: form.rg || undefined,
         crm: form.crm || undefined,
-        sus: form.sus.replace(/\D/g, '') || undefined,
-        birthday: form.birthday || undefined,
-        cep: form.cep.replace(/\D/g, '') || undefined,
+        sus: onlyDigits(form.sus) || undefined,
+        // birthday no form é DD/MM/AAAA; convertemos pra ISO
+        // yyyy-mm-dd que é o que o back grava.
+        birthday: birthdayToISO(form.birthday),
+        cep: onlyDigits(form.cep) || undefined,
         street: form.street || undefined,
         number: form.number || undefined,
         complemento: form.complemento || undefined,
@@ -430,11 +498,15 @@ export default function PublicRegistration() {
                   fullWidth
                   value={form.cellphone}
                   onChange={e => {
-                    set('cellphone', e.target.value);
-                    debouncedCheckField('cellphone', e.target.value);
+                    const masked = maskCellphone(e.target.value);
+                    set('cellphone', masked);
+                    debouncedCheckField('cellphone', onlyDigits(masked));
                   }}
-                  onBlur={() => checkField('cellphone', form.cellphone)}
+                  onBlur={() =>
+                    checkField('cellphone', onlyDigits(form.cellphone))
+                  }
                   placeholder="(31) 99999-9999"
+                  inputProps={{ inputMode: 'numeric', maxLength: 15 }}
                   error={errorFor('cellphone')}
                   helperText={helperFor('cellphone')}
                 />
@@ -459,11 +531,13 @@ export default function PublicRegistration() {
                   fullWidth
                   value={form.cpf}
                   onChange={e => {
-                    set('cpf', e.target.value);
-                    debouncedCheckField('cpf', e.target.value);
+                    const masked = maskCPF(e.target.value);
+                    set('cpf', masked);
+                    debouncedCheckField('cpf', onlyDigits(masked));
                   }}
-                  onBlur={() => checkField('cpf', form.cpf)}
+                  onBlur={() => checkField('cpf', onlyDigits(form.cpf))}
                   placeholder="000.000.000-00"
+                  inputProps={{ inputMode: 'numeric', maxLength: 14 }}
                   error={errorFor('cpf')}
                   helperText={helperFor('cpf')}
                 />
@@ -502,10 +576,13 @@ export default function PublicRegistration() {
                   fullWidth
                   value={form.sus}
                   onChange={e => {
-                    set('sus', e.target.value);
-                    debouncedCheckField('sus', e.target.value);
+                    const masked = maskCNS(e.target.value);
+                    set('sus', masked);
+                    debouncedCheckField('sus', onlyDigits(masked));
                   }}
-                  onBlur={() => checkField('sus', form.sus)}
+                  onBlur={() => checkField('sus', onlyDigits(form.sus))}
+                  placeholder="000 0000 0000 0000"
+                  inputProps={{ inputMode: 'numeric', maxLength: 18 }}
                   error={errorFor('sus')}
                   helperText={helperFor('sus')}
                 />
@@ -513,11 +590,19 @@ export default function PublicRegistration() {
               {needsField('birthday') && (
                 <TextField
                   label="Data de nascimento"
-                  type="date"
                   fullWidth
-                  InputLabelProps={{ shrink: true }}
                   value={form.birthday}
-                  onChange={e => set('birthday', e.target.value)}
+                  onChange={e => set('birthday', maskBirthday(e.target.value))}
+                  placeholder="DD/MM/AAAA"
+                  inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                  error={
+                    form.birthday.length === 10 && !isBirthdayValid(form.birthday)
+                  }
+                  helperText={
+                    form.birthday.length === 10 && !isBirthdayValid(form.birthday)
+                      ? 'Data inválida'
+                      : undefined
+                  }
                 />
               )}
             </Stack>
@@ -542,11 +627,13 @@ export default function PublicRegistration() {
                   fullWidth
                   value={form.cep}
                   onChange={e => {
-                    set('cep', e.target.value);
-                    debouncedCep(e.target.value);
+                    const masked = maskCEP(e.target.value);
+                    set('cep', masked);
+                    debouncedCep(masked);
                   }}
                   onBlur={() => lookupCep(form.cep)}
                   placeholder="00000-000"
+                  inputProps={{ inputMode: 'numeric', maxLength: 9 }}
                   helperText={
                     cepLoading
                       ? 'Buscando endereço…'
