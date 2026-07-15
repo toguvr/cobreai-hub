@@ -176,6 +176,7 @@ export default function PublicRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<null | {
     already_had_account: boolean;
+    already_approved: boolean;
   }>(null);
 
   // Status de cada campo unique (feedback em tempo real)
@@ -448,6 +449,7 @@ export default function PublicRegistration() {
       );
       setSubmitted({
         already_had_account: !!res.data?.already_had_account,
+        already_approved: !!res.data?.already_approved,
       });
       setStep(4);
     } catch (e: any) {
@@ -794,12 +796,16 @@ export default function PublicRegistration() {
             <Stack alignItems="center" gap={2} py={2}>
               <CheckCircleIcon color="success" sx={{ fontSize: 64 }} />
               <Typography variant="h6" textAlign="center">
-                Cadastro enviado!
+                {submitted.already_approved
+                  ? 'Documentos enviados!'
+                  : 'Cadastro enviado!'}
               </Typography>
               <Typography textAlign="center" color="text.secondary">
-                {submitted.already_had_account
-                  ? 'Vinculamos você à empresa mantendo sua senha atual. Aguarde a aprovação — você receberá um e-mail assim que o admin analisar.'
-                  : 'Aguarde a aprovação da empresa. Você receberá um e-mail com suas credenciais assim que for aprovado.'}
+                {submitted.already_approved
+                  ? 'Seu cadastro na empresa continua aprovado — os novos documentos foram anexados ao seu perfil.'
+                  : submitted.already_had_account
+                    ? 'Vinculamos você à empresa mantendo sua senha atual. Aguarde a aprovação — você receberá um e-mail assim que o admin analisar.'
+                    : 'Aguarde a aprovação da empresa. Você receberá um e-mail com suas credenciais assim que for aprovado.'}
               </Typography>
             </Stack>
           )}
