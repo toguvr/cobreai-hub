@@ -320,6 +320,49 @@ export default function PublicRegistration() {
     return emailMissingFields.includes(f);
   };
 
+  // Se a conta já existe e todos os campos daquela etapa estão
+  // preenchidos, a etapa fica "vazia" — não faz sentido mostrar um
+  // Alert e obrigar clique pra avançar. Nesses casos pulamos.
+  //
+  // Etapa 0: sempre tem e-mail (nunca pula).
+  // Etapa 3 (Anexos): sempre mostrada mesmo pra conta existente, pois
+  // a empresa exige docs pra credenciar mesmo médicos já cadastrados.
+  const stepIsEmpty = (s: number): boolean => {
+    if (s === 1) {
+      return (
+        !needsField('cpf') &&
+        !needsField('rg') &&
+        !needsField('crm') &&
+        !needsField('sus') &&
+        !needsField('birthday')
+      );
+    }
+    if (s === 2) {
+      return (
+        !needsField('cep') &&
+        !needsField('street') &&
+        !needsField('number') &&
+        !needsField('bairro') &&
+        !needsField('cidade') &&
+        !needsField('uf')
+      );
+    }
+    return false;
+  };
+
+  const goForward = () => {
+    let next = step + 1;
+    // Pula etapas vazias até chegar em 3 (Anexos) ou em 4 (Envio).
+    while (next < 3 && stepIsEmpty(next)) next++;
+    setStep(Math.min(3, next));
+  };
+
+  const goBack = () => {
+    let prev = step - 1;
+    while (prev > 0 && stepIsEmpty(prev)) prev--;
+    setStep(Math.max(0, prev));
+  };
+
   // Regras da etapa 0:
   // - E-mail sempre obrigatório e válido.
   // - Se a conta já existe (emailFoundExisting), nome e celular são
@@ -772,7 +815,7 @@ export default function PublicRegistration() {
             >
               <Button
                 disabled={step === 0 || submitting}
-                onClick={() => setStep(s => Math.max(0, s - 1))}
+                onClick={goBack}
               >
                 Voltar
               </Button>
@@ -780,7 +823,7 @@ export default function PublicRegistration() {
                 <Button
                   variant="contained"
                   disabled={!canGoNext() || submitting}
-                  onClick={() => setStep(s => Math.min(3, s + 1))}
+                  onClick={goForward}
                 >
                   Continuar
                 </Button>
