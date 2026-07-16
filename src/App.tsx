@@ -111,6 +111,11 @@ function AppRoutes() {
         path="/credenciamento/:enterprise_id/etapa1"
         element={<PublicRegistration />}
       />
+      {/* Nova via de credenciamento com token de link (bank_mode). */}
+      <Route
+        path="/credenciamento/link/:token"
+        element={<PublicRegistration />}
+      />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

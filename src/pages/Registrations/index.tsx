@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -26,6 +26,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import MenuItem from '@mui/material/MenuItem';
 import { toast } from 'react-toastify';
 
 import { PrivateLayout } from '../../components/PrivateLayout';
@@ -78,6 +81,24 @@ const STATUS_COLOR: Record<Status, 'warning' | 'success' | 'error'> = {
   rejected: 'error',
 };
 
+type BankMode = 'none' | 'pf' | 'pj' | 'both';
+
+const BANK_MODE_LABEL: Record<BankMode, string> = {
+  none: 'Sem dados bancários',
+  pf: 'Somente PF',
+  pj: 'Somente PJ',
+  both: 'PF e PJ',
+};
+
+interface RegistrationLink {
+  id: string;
+  token: string;
+  bank_mode: BankMode;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
 export default function Registrations() {
   const { current } = useEnterprise();
   const [tab, setTab] = useState<Status>('pending');
@@ -96,6 +117,90 @@ export default function Registrations() {
 
   // Snackbar do copiar link
   const [copied, setCopied] = useState(false);
+
+  // Links de convite (tokenizados, com bank_mode)
+  const [links, setLinks] = useState<RegistrationLink[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [newLinkBankMode, setNewLinkBankMode] = useState<BankMode>('none');
+  const [newLinkExpiresDays, setNewLinkExpiresDays] = useState<string>('30');
+  const [creatingLink, setCreatingLink] = useState(false);
+
+  const loadLinks = async () => {
+    if (!current?.id) return;
+    setLoadingLinks(true);
+    try {
+      const res = await api.get<RegistrationLink[]>(
+        `/enterprise/${current.id}/registration-links`,
+      );
+      setLinks(res.data ?? []);
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao carregar links de convite.',
+      );
+    } finally {
+      setLoadingLinks(false);
+    }
+  };
+
+  const createLink = async () => {
+    if (!current?.id) return;
+    setCreatingLink(true);
+    try {
+      const body: {
+        bank_mode: BankMode;
+        expires_at?: string;
+      } = { bank_mode: newLinkBankMode };
+      const days = Number(newLinkExpiresDays);
+      if (Number.isFinite(days) && days > 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        body.expires_at = d.toISOString();
+      }
+      await api.post(`/enterprise/${current.id}/registration-links`, body);
+      toast.success('Link de convite criado.');
+      setLinkModalOpen(false);
+      setNewLinkBankMode('none');
+      setNewLinkExpiresDays('30');
+      await loadLinks();
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao criar link. Tente novamente.',
+      );
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
+  const revokeLink = async (link: RegistrationLink) => {
+    if (!current?.id) return;
+    if (
+      !window.confirm(
+        'Revogar este link? Quem já tiver o link não conseguirá mais usá-lo.',
+      )
+    )
+      return;
+    try {
+      await api.delete(
+        `/enterprise/${current.id}/registration-links/${link.id}`,
+      );
+      toast.success('Link revogado.');
+      await loadLinks();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao revogar.');
+    }
+  };
+
+  const copyToken = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/credenciamento/link/${token}`,
+      );
+      setCopied(true);
+    } catch {
+      toast.error('Não foi possível copiar. Copie manualmente.');
+    }
+  };
 
   const load = async () => {
     if (!current?.id) return;
@@ -120,20 +225,10 @@ export default function Registrations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id, tab]);
 
-  const inviteLink = useMemo(() => {
-    if (!current?.id) return '';
-    return `${window.location.origin}/credenciamento/${current.id}/etapa1`;
+  useEffect(() => {
+    loadLinks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
-
-  const copyLink = async () => {
-    if (!inviteLink) return;
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-    } catch {
-      toast.error('Não foi possível copiar. Copie manualmente.');
-    }
-  };
 
   const openDetails = async (item: Registration) => {
     setSelected(item);
@@ -219,45 +314,135 @@ export default function Registrations() {
             </Typography>
           </Box>
 
-          <Paper
-            variant="outlined"
-            sx={{
-              px: 2,
-              py: 1.5,
-              display: 'flex',
-              gap: 1,
-              alignItems: 'center',
-              maxWidth: '100%',
-              overflow: 'hidden',
-            }}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setLinkModalOpen(true)}
           >
-            <Box sx={{ minWidth: 0 }}>
-              <Typography fontSize={11} color="text.secondary" letterSpacing={0.5}>
-                LINK DE CADASTRO PÚBLICO
-              </Typography>
-              <MuiLink
-                href={inviteLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  fontSize: 13,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: 'block',
-                  maxWidth: 320,
-                }}
-              >
-                {inviteLink}
-              </MuiLink>
-            </Box>
-            <Tooltip title="Copiar link">
-              <IconButton onClick={copyLink} size="small">
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Paper>
+            Gerar link de convite
+          </Button>
         </Stack>
+
+        {/* Painel de links de convite (tokenizados, com bank_mode) */}
+        <Paper variant="outlined" sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ px: 2, py: 1.5 }}
+          >
+            <Box>
+              <Typography fontSize={13} fontWeight={600}>
+                Links ativos
+              </Typography>
+              <Typography fontSize={12} color="text.secondary">
+                Cada link define se o médico preenche PF, PJ, ambos ou nenhum.
+              </Typography>
+            </Box>
+            <IconButton onClick={loadLinks} disabled={loadingLinks} size="small">
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+          <Divider />
+
+          {loadingLinks ? (
+            <Box p={3} display="flex" justifyContent="center">
+              <CircularProgress size={22} />
+            </Box>
+          ) : links.length === 0 ? (
+            <Box p={3} textAlign="center" color="text.secondary" fontSize={13}>
+              Nenhum link gerado. Clique em <b>Gerar link de convite</b> pra
+              começar.
+            </Box>
+          ) : (
+            <Stack divider={<Divider />}>
+              {links.map(link => {
+                const url = `${window.location.origin}/credenciamento/link/${link.token}`;
+                const isRevoked = !!link.revoked_at;
+                const isExpired =
+                  !!link.expires_at &&
+                  new Date(link.expires_at).getTime() < Date.now();
+                const inactive = isRevoked || isExpired;
+                return (
+                  <Stack
+                    key={link.id}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    alignItems={{ sm: 'center' }}
+                    spacing={1.5}
+                    sx={{ p: 2, opacity: inactive ? 0.6 : 1 }}
+                  >
+                    <Box flex={1} minWidth={0}>
+                      <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
+                        <Chip
+                          size="small"
+                          label={BANK_MODE_LABEL[link.bank_mode]}
+                          color={
+                            link.bank_mode === 'none'
+                              ? 'default'
+                              : link.bank_mode === 'both'
+                              ? 'secondary'
+                              : 'primary'
+                          }
+                          variant="outlined"
+                        />
+                        {isRevoked && (
+                          <Chip size="small" label="Revogado" color="error" />
+                        )}
+                        {!isRevoked && isExpired && (
+                          <Chip size="small" label="Expirado" color="warning" />
+                        )}
+                      </Stack>
+                      <MuiLink
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          fontSize: 12,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: 'block',
+                        }}
+                      >
+                        {url}
+                      </MuiLink>
+                      <Typography fontSize={11} color="text.secondary" mt={0.5}>
+                        Criado em{' '}
+                        {new Date(link.created_at).toLocaleDateString('pt-BR')}
+                        {link.expires_at &&
+                          ` · Expira em ${new Date(
+                            link.expires_at,
+                          ).toLocaleDateString('pt-BR')}`}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Copiar link">
+                        <IconButton
+                          size="small"
+                          onClick={() => copyToken(link.token)}
+                          disabled={inactive}
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      {!isRevoked && (
+                        <Tooltip title="Revogar">
+                          <IconButton
+                            size="small"
+                            onClick={() => revokeLink(link)}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </Stack>
+                );
+              })}
+            </Stack>
+          )}
+        </Paper>
 
         <Paper variant="outlined">
           <Stack
@@ -487,6 +672,59 @@ export default function Registrations() {
             disabled={acting}
           >
             {acting ? 'Rejeitando…' : 'Confirmar rejeição'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de criação de link de convite */}
+      <Dialog
+        open={linkModalOpen}
+        onClose={() => !creatingLink && setLinkModalOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Novo link de convite</DialogTitle>
+        <DialogContent>
+          <Stack gap={2} mt={1}>
+            <TextField
+              select
+              label="Dados bancários"
+              value={newLinkBankMode}
+              onChange={e => setNewLinkBankMode(e.target.value as BankMode)}
+              helperText="Escolha conforme o hospital em que o médico será vinculado."
+              fullWidth
+            >
+              {(Object.keys(BANK_MODE_LABEL) as BankMode[]).map(k => (
+                <MenuItem key={k} value={k}>
+                  {BANK_MODE_LABEL[k]}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Expira em (dias)"
+              value={newLinkExpiresDays}
+              onChange={e =>
+                setNewLinkExpiresDays(e.target.value.replace(/\D/g, ''))
+              }
+              helperText="Deixe em branco pra link sem prazo."
+              fullWidth
+              inputMode="numeric"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setLinkModalOpen(false)}
+            disabled={creatingLink}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={createLink}
+            disabled={creatingLink}
+          >
+            {creatingLink ? 'Gerando…' : 'Gerar link'}
           </Button>
         </DialogActions>
       </Dialog>

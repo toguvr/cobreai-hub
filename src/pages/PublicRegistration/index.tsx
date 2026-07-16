@@ -32,10 +32,60 @@ interface DocType {
   required: boolean;
 }
 
+type BankMode = 'none' | 'pf' | 'pj' | 'both';
+
 interface PublicInfo {
   enterprise: { id: string; title: string; logo_url?: string | null };
   document_types: DocType[];
+  bank_mode?: BankMode;
+  link_token?: string;
 }
+
+interface PFAccount {
+  bank_code: string;
+  bank_name: string;
+  agency: string;
+  account: string;
+}
+
+interface PJAccount {
+  cnpj: string;
+  company_name: string;
+  accounting_phone: string;
+  bank_code: string;
+  bank_name: string;
+  agency: string;
+  account: string;
+  nf_emails: string[];
+}
+
+const EMPTY_PF: PFAccount = {
+  bank_code: '',
+  bank_name: '',
+  agency: '',
+  account: '',
+};
+
+const EMPTY_PJ: PJAccount = {
+  cnpj: '',
+  company_name: '',
+  accounting_phone: '',
+  bank_code: '',
+  bank_name: '',
+  agency: '',
+  account: '',
+  nf_emails: [''],
+};
+
+const maskCNPJ = (v: string): string => {
+  const d = v.replace(/\D/g, '').slice(0, 14);
+  if (d.length <= 2) return d;
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length <= 12)
+    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+};
 
 interface FormData {
   name: string;
@@ -62,7 +112,17 @@ const EMPTY_FORM: FormData = {
   bairro: '', cidade: '', uf: '',
 };
 
-const STEPS = ['Contato', 'Documentos pessoais', 'Endereço', 'Anexos', 'Envio'];
+// A ordem dos steps é fixa. A visibilidade da etapa "Dados bancários"
+// depende do bank_mode do link — quando 'none' (fluxo antigo sem
+// link), pulamos pra manter compat.
+const STEPS = [
+  'Contato',
+  'Documentos pessoais',
+  'Endereço',
+  'Anexos',
+  'Dados bancários',
+  'Envio',
+];
 
 // ── Máscaras ─────────────────────────────────────────────────────
 // Todas as máscaras trabalham com string livre — o form guarda o
@@ -195,11 +255,18 @@ function useDebouncedCallback<A extends unknown[]>(
 }
 
 export default function PublicRegistration() {
-  const { enterprise_id } = useParams<{ enterprise_id: string }>();
+  const { enterprise_id: enterpriseIdParam, token } = useParams<{
+    enterprise_id?: string;
+    token?: string;
+  }>();
 
   const [info, setInfo] = useState<PublicInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // enterprise_id efetivo — quando o fluxo é por link, ele vem no info.
+  const enterprise_id = info?.enterprise.id ?? enterpriseIdParam;
+  const bankMode: BankMode = info?.bank_mode ?? 'none';
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -227,14 +294,22 @@ export default function PublicRegistration() {
   // Loading do viacep
   const [cepLoading, setCepLoading] = useState(false);
 
+  // Contas bancárias (só usadas quando bank_mode !== 'none')
+  const [pfAccount, setPfAccount] = useState<PFAccount>({ ...EMPTY_PF });
+  const [pjAccount, setPjAccount] = useState<PJAccount>({
+    ...EMPTY_PJ,
+    nf_emails: [''],
+  });
+
   // ── Fetch info pública ─────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const res = await publicApi.get<PublicInfo>(
-          `/public/enterprise/${enterprise_id}/registration`,
-        );
+        const url = token
+          ? `/public/registration-link/${token}`
+          : `/public/enterprise/${enterpriseIdParam}/registration`;
+        const res = await publicApi.get<PublicInfo>(url);
         if (!mounted) return;
         setInfo(res.data);
       } catch (e: any) {
@@ -246,8 +321,10 @@ export default function PublicRegistration() {
         setLoading(false);
       }
     })();
-    return () => { mounted = false; };
-  }, [enterprise_id]);
+    return () => {
+      mounted = false;
+    };
+  }, [enterpriseIdParam, token]);
 
   const requiredDocs = useMemo(
     () => (info?.document_types ?? []).filter(d => d.required),
@@ -389,14 +466,22 @@ export default function PublicRegistration() {
         !needsField('uf')
       );
     }
+    if (s === 4) {
+      // Sem link ou link.bank_mode === 'none' → não pede banking.
+      return bankMode === 'none';
+    }
     return false;
   };
 
+  // Último step navegável antes do "Envio" — 3 (Anexos) sempre existe;
+  // 4 (Banking) só aparece quando o link exige. Passamos disso pra 5
+  // (Envio final, que fica no fluxo de submit).
+  const lastFormStep = bankMode === 'none' ? 3 : 4;
+
   const goForward = () => {
     let next = step + 1;
-    // Pula etapas vazias até chegar em 3 (Anexos) ou em 4 (Envio).
-    while (next < 3 && stepIsEmpty(next)) next++;
-    setStep(Math.min(3, next));
+    while (next < lastFormStep && stepIsEmpty(next)) next++;
+    setStep(Math.min(lastFormStep, next));
   };
 
   const goBack = () => {
@@ -427,6 +512,37 @@ export default function PublicRegistration() {
   const hasTakenField = (fields: string[]) =>
     fields.some(f => fieldStatus[f] === 'taken');
 
+  // Regras da etapa 4 (Banking) — só liga quando bank_mode exige.
+  // PF: os 4 campos bancários (código, banco, agência, conta) são
+  // pedidos em conjunto; ou preenche tudo, ou nada. PJ: CNPJ + razão
+  // + telefone contábil + pelo menos 1 e-mail de NF válido +
+  // dados bancários completos.
+  const pfComplete =
+    !!pfAccount.bank_code.trim() &&
+    !!pfAccount.bank_name.trim() &&
+    !!pfAccount.agency.trim() &&
+    !!pfAccount.account.trim();
+  const pjNfEmails = pjAccount.nf_emails
+    .map(e => e.trim())
+    .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  const pjComplete =
+    pjAccount.cnpj.replace(/\D/g, '').length === 14 &&
+    !!pjAccount.company_name.trim() &&
+    !!pjAccount.accounting_phone.trim() &&
+    pjNfEmails.length > 0 &&
+    !!pjAccount.bank_code.trim() &&
+    !!pjAccount.bank_name.trim() &&
+    !!pjAccount.agency.trim() &&
+    !!pjAccount.account.trim();
+  const bankValid =
+    bankMode === 'none'
+      ? true
+      : bankMode === 'pf'
+      ? pfComplete
+      : bankMode === 'pj'
+      ? pjComplete
+      : pfComplete && pjComplete;
+
   const canGoNext = () => {
     if (step === 0) return contactValid && !hasTakenField(['email', 'cellphone']);
     if (step === 1) {
@@ -442,6 +558,7 @@ export default function PublicRegistration() {
       return true;
     }
     if (step === 3) return docsValid;
+    if (step === 4) return bankValid;
     return true;
   };
 
@@ -458,6 +575,34 @@ export default function PublicRegistration() {
     if (!enterprise_id) return;
     setSubmitting(true);
     try {
+      // Monta lista de bank_accounts conforme bank_mode. PF vai como
+      // is_pj:false com só os campos bancários; PJ vai como is_pj:true
+      // com todos os dados da empresa. NF emails são filtrados por
+      // regex antes de enviar.
+      const bank_accounts: Array<Record<string, unknown>> = [];
+      if (bankMode === 'pf' || bankMode === 'both') {
+        bank_accounts.push({
+          is_pj: false,
+          bank_code: pfAccount.bank_code.trim(),
+          bank_name: pfAccount.bank_name.trim(),
+          agency: pfAccount.agency.trim(),
+          account: pfAccount.account.trim(),
+        });
+      }
+      if (bankMode === 'pj' || bankMode === 'both') {
+        bank_accounts.push({
+          is_pj: true,
+          cnpj: pjAccount.cnpj.replace(/\D/g, ''),
+          company_name: pjAccount.company_name.trim(),
+          accounting_phone: onlyDigits(pjAccount.accounting_phone),
+          bank_code: pjAccount.bank_code.trim(),
+          bank_name: pjAccount.bank_name.trim(),
+          agency: pjAccount.agency.trim(),
+          account: pjAccount.account.trim(),
+          nf_emails: pjNfEmails,
+        });
+      }
+
       const fd = new FormData();
       const payload = {
         name: form.name.trim(),
@@ -477,6 +622,7 @@ export default function PublicRegistration() {
         bairro: form.bairro || undefined,
         cidade: form.cidade || undefined,
         uf: form.uf || undefined,
+        bank_accounts: bank_accounts.length ? bank_accounts : undefined,
       };
       fd.append('payload', JSON.stringify(payload));
 
@@ -494,16 +640,18 @@ export default function PublicRegistration() {
       });
       fd.append('file_docs', JSON.stringify(fileMeta));
 
-      const res = await publicApi.post(
-        `/public/enterprise/${enterprise_id}/registration`,
-        fd,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      );
+      const url = token
+        ? `/public/enterprise/${enterprise_id}/registration/by-token/${token}`
+        : `/public/enterprise/${enterprise_id}/registration`;
+      const res = await publicApi.post(url, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       setSubmitted({
         already_had_account: !!res.data?.already_had_account,
         already_approved: !!res.data?.already_approved,
       });
-      setStep(4);
+      // Vai pro passo "Envio" (último do array de STEPS).
+      setStep(STEPS.length - 1);
     } catch (e: any) {
       alert(
         e?.response?.data?.message ||
@@ -865,7 +1013,27 @@ export default function PublicRegistration() {
             </Stack>
           )}
 
-          {step === 4 && submitted && (
+          {step === 4 && bankMode !== 'none' && (
+            <Stack gap={3}>
+              <Typography fontWeight={600}>Dados bancários</Typography>
+              <Alert severity="info">
+                {bankMode === 'both'
+                  ? 'Este vínculo exige dados bancários como Pessoa Física e como Pessoa Jurídica.'
+                  : bankMode === 'pf'
+                  ? 'Este vínculo exige dados bancários como Pessoa Física.'
+                  : 'Este vínculo exige dados bancários como Pessoa Jurídica.'}
+              </Alert>
+
+              {(bankMode === 'pf' || bankMode === 'both') && (
+                <PFBankForm value={pfAccount} onChange={setPfAccount} />
+              )}
+              {(bankMode === 'pj' || bankMode === 'both') && (
+                <PJBankForm value={pjAccount} onChange={setPjAccount} />
+              )}
+            </Stack>
+          )}
+
+          {step === STEPS.length - 1 && submitted && (
             <Stack alignItems="center" gap={2} py={2}>
               <CheckCircleIcon color="success" sx={{ fontSize: 64 }} />
               <Typography variant="h6" textAlign="center">
@@ -885,7 +1053,7 @@ export default function PublicRegistration() {
 
           {submitting && <LinearProgress sx={{ mt: 2 }} />}
 
-          {step < 4 && (
+          {step <= lastFormStep && (
             <Stack
               direction="row"
               justifyContent="space-between"
@@ -898,7 +1066,7 @@ export default function PublicRegistration() {
               >
                 Voltar
               </Button>
-              {step < 3 ? (
+              {step < lastFormStep ? (
                 <Button
                   variant="contained"
                   disabled={!canGoNext() || submitting}
@@ -910,7 +1078,7 @@ export default function PublicRegistration() {
                 <Button
                   variant="contained"
                   color="success"
-                  disabled={!docsValid || submitting}
+                  disabled={!canGoNext() || submitting}
                   onClick={submit}
                 >
                   {submitting ? 'Enviando…' : 'Enviar cadastro'}
@@ -1007,6 +1175,175 @@ function DocRow({
         accept="image/*,application/pdf"
         onChange={e => onPick(e.target.files?.[0] ?? null)}
       />
+    </Paper>
+  );
+}
+
+// ─── Banking forms ────────────────────────────────────────────────
+
+function BankFields({
+  value,
+  onChange,
+}: {
+  value: { bank_code: string; bank_name: string; agency: string; account: string };
+  onChange: (patch: Partial<typeof value>) => void;
+}) {
+  return (
+    <>
+      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+        <TextField
+          label="Código do banco"
+          value={value.bank_code}
+          onChange={e =>
+            onChange({ bank_code: e.target.value.replace(/\D/g, '').slice(0, 5) })
+          }
+          sx={{ flex: 1 }}
+          inputProps={{ inputMode: 'numeric' }}
+        />
+        <TextField
+          label="Nome do banco"
+          value={value.bank_name}
+          onChange={e => onChange({ bank_name: e.target.value })}
+          sx={{ flex: 2 }}
+        />
+      </Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
+        <TextField
+          label="Agência"
+          value={value.agency}
+          onChange={e => onChange({ agency: e.target.value.slice(0, 10) })}
+          sx={{ flex: 1 }}
+        />
+        <TextField
+          label="Conta corrente"
+          value={value.account}
+          onChange={e => onChange({ account: e.target.value.slice(0, 20) })}
+          sx={{ flex: 2 }}
+        />
+      </Stack>
+    </>
+  );
+}
+
+function PFBankForm({
+  value,
+  onChange,
+}: {
+  value: PFAccount;
+  onChange: (v: PFAccount) => void;
+}) {
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Typography fontSize={13} fontWeight={600} mb={2}>
+        Conta bancária (Pessoa Física)
+      </Typography>
+      <Stack gap={2}>
+        <BankFields
+          value={value}
+          onChange={patch => onChange({ ...value, ...patch })}
+        />
+      </Stack>
+    </Paper>
+  );
+}
+
+function PJBankForm({
+  value,
+  onChange,
+}: {
+  value: PJAccount;
+  onChange: (v: PJAccount) => void;
+}) {
+  const set = <K extends keyof PJAccount>(k: K, v: PJAccount[K]) =>
+    onChange({ ...value, [k]: v });
+
+  const setNfEmail = (idx: number, v: string) => {
+    const next = [...value.nf_emails];
+    next[idx] = v;
+    onChange({ ...value, nf_emails: next });
+  };
+
+  const addNfEmail = () =>
+    onChange({ ...value, nf_emails: [...value.nf_emails, ''] });
+
+  const removeNfEmail = (idx: number) => {
+    if (value.nf_emails.length <= 1) return;
+    onChange({
+      ...value,
+      nf_emails: value.nf_emails.filter((_, i) => i !== idx),
+    });
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Typography fontSize={13} fontWeight={600} mb={2}>
+        Conta bancária (Pessoa Jurídica)
+      </Typography>
+      <Stack gap={2}>
+        <TextField
+          label="CNPJ"
+          value={value.cnpj}
+          onChange={e => set('cnpj', maskCNPJ(e.target.value))}
+          placeholder="00.000.000/0000-00"
+          inputProps={{ inputMode: 'numeric', maxLength: 18 }}
+          fullWidth
+        />
+        <TextField
+          label="Razão social"
+          value={value.company_name}
+          onChange={e => set('company_name', e.target.value)}
+          fullWidth
+        />
+        <TextField
+          label="Telefone da contabilidade"
+          value={value.accounting_phone}
+          onChange={e =>
+            set('accounting_phone', maskCellphone(e.target.value))
+          }
+          placeholder="(31) 3333-4444"
+          inputProps={{ inputMode: 'numeric', maxLength: 15 }}
+          fullWidth
+        />
+
+        <Box>
+          <Typography fontSize={12} color="text.secondary" mb={1}>
+            E-mails para solicitação de NF (você pode adicionar mais de um)
+          </Typography>
+          <Stack gap={1}>
+            {value.nf_emails.map((email, idx) => (
+              <Stack key={idx} direction="row" gap={1} alignItems="center">
+                <TextField
+                  label={`E-mail ${idx + 1}`}
+                  value={email}
+                  onChange={e => setNfEmail(idx, e.target.value.trim())}
+                  type="email"
+                  fullWidth
+                />
+                {value.nf_emails.length > 1 && (
+                  <IconButton
+                    size="small"
+                    onClick={() => removeNfEmail(idx)}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </Stack>
+            ))}
+            <Button
+              size="small"
+              onClick={addNfEmail}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              + adicionar e-mail
+            </Button>
+          </Stack>
+        </Box>
+
+        <BankFields
+          value={value}
+          onChange={patch => onChange({ ...value, ...patch })}
+        />
+      </Stack>
     </Paper>
   );
 }
