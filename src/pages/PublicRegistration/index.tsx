@@ -273,9 +273,17 @@ export default function PublicRegistration() {
       }
       setFieldStatus(s => ({ ...s, [field]: 'checking' }));
       try {
+        // Passa o e-mail digitado como context_email pra o back
+        // ignorar "conflito" com a própria conta do médico. Sem isso,
+        // completar sus/rg/celular na conta existente sempre volta
+        // "já em uso" — porque o próprio user tem esses dados.
+        const params: Record<string, string> = { field, value };
+        if (field !== 'email' && form.email) {
+          params.context_email = form.email.trim();
+        }
         const res = await publicApi.get(
           `/public/enterprise/${enterprise_id}/registration/check`,
-          { params: { field, value } },
+          { params },
         );
         const { available, existing_user_missing_fields } = res.data as {
           available: boolean;
@@ -314,7 +322,7 @@ export default function PublicRegistration() {
         setFieldStatus(s => ({ ...s, [field]: 'idle' }));
       }
     },
-    [enterprise_id],
+    [enterprise_id, form.email],
   );
 
   // ── Auto-preenche endereço via ViaCEP ───────────────────────────
