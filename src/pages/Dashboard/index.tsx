@@ -50,6 +50,23 @@ const BRL = (v: number, compact = true) =>
     maximumFractionDigits: compact ? 0 : 2,
   });
 
+// Reduz a fonte proporcionalmente ao comprimento do texto pra
+// impedir que valores tipo "R$ 12.345.678" transbordem os cards
+// (o hero do saldo é o principal afetado — segue R$ + delta na
+// mesma linha).
+const fitFontSize = (
+  text: string,
+  base: { xs: number; md: number },
+): { xs: number; md: number } => {
+  const len = text.length;
+  if (len <= 10) return base;
+  const scale = Math.max(0.55, 1 - (len - 10) * 0.06);
+  return {
+    xs: Math.round(base.xs * scale),
+    md: Math.round(base.md * scale),
+  };
+};
+
 const MONTHS_PT_SHORT = [
   'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
   'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
@@ -183,8 +200,23 @@ function HeroBalance({
           <Typography fontSize={11} fontWeight={600} color="text.secondary" textTransform="uppercase" letterSpacing={0.6}>
             Saldo do mês
           </Typography>
-          <Box display="flex" alignItems="baseline" gap={1.5} mt={0.5} flexWrap="wrap">
-            <Typography fontSize={{ xs: 28, md: 36 }} fontWeight={800} color={accent} lineHeight={1.1}>
+          <Box display="flex" alignItems="baseline" gap={1.5} mt={0.5} flexWrap="wrap" minWidth={0}>
+            <Typography
+              fontSize={fitFontSize(
+                `${isPositive ? '+' : ''}${BRL(balance)}`,
+                { xs: 28, md: 36 },
+              )}
+              fontWeight={800}
+              color={accent}
+              lineHeight={1.1}
+              title={`${isPositive ? '+' : ''}${BRL(balance)}`}
+              sx={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+              }}
+            >
               {isPositive ? '+' : ''}{BRL(balance)}
             </Typography>
             <DeltaBadge delta={balanceDelta} size="md" />
@@ -199,8 +231,13 @@ function HeroBalance({
           <Typography fontSize={11} fontWeight={600} color="text.secondary" textTransform="uppercase" letterSpacing={0.6}>
             Margem líquida
           </Typography>
-          <Box display="flex" alignItems="baseline" gap={1} mt={0.5} flexWrap="wrap">
-            <Typography fontSize={{ xs: 18, md: 22 }} fontWeight={700} color="text.primary">
+          <Box display="flex" alignItems="baseline" gap={1} mt={0.5} flexWrap="wrap" minWidth={0}>
+            <Typography
+              fontSize={{ xs: 18, md: 22 }}
+              fontWeight={700}
+              color="text.primary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
               {marginPct === null ? '—' : `${marginPct.toFixed(1)}%`}
             </Typography>
             {marginDelta !== null && (
@@ -208,6 +245,7 @@ function HeroBalance({
                 fontSize={11}
                 fontWeight={600}
                 color={marginDelta >= 0 ? brand.primary : C.red}
+                sx={{ whiteSpace: 'nowrap' }}
               >
                 {marginDelta >= 0 ? '+' : ''}{marginDelta.toFixed(1)} pp
               </Typography>
@@ -219,8 +257,13 @@ function HeroBalance({
           <Typography fontSize={11} fontWeight={600} color="text.secondary" textTransform="uppercase" letterSpacing={0.6}>
             Médicos ativos
           </Typography>
-          <Box display="flex" alignItems="baseline" gap={1} mt={0.5} flexWrap="wrap">
-            <Typography fontSize={{ xs: 18, md: 22 }} fontWeight={700} color="text.primary">
+          <Box display="flex" alignItems="baseline" gap={1} mt={0.5} flexWrap="wrap" minWidth={0}>
+            <Typography
+              fontSize={{ xs: 18, md: 22 }}
+              fontWeight={700}
+              color="text.primary"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
               {activeDoctors}
             </Typography>
             <DeltaBadge delta={doctorsDelta} />

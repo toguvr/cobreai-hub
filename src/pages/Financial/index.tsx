@@ -54,6 +54,22 @@ const BRL = (v: number, compact = true) =>
     maximumFractionDigits: compact ? 0 : 2,
   });
 
+// Reduz a fonte proporcionalmente ao comprimento do texto pra evitar
+// que valores tipo "R$ 12.345.678" transbordem os cards. Base é o
+// tamanho pra texto curto (~10 chars); acima disso vai encolhendo.
+const fitFontSize = (
+  text: string,
+  base: { xs: number; md: number },
+): { xs: number; md: number } => {
+  const len = text.length;
+  if (len <= 10) return base;
+  const scale = Math.max(0.55, 1 - (len - 10) * 0.06);
+  return {
+    xs: Math.round(base.xs * scale),
+    md: Math.round(base.md * scale),
+  };
+};
+
 const MONTHS_LONG = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -180,12 +196,20 @@ function KpiCard({
             {label}
           </Typography>
           <Typography
-            fontSize={hero ? { xs: 24, md: 30 } : { xs: 18, md: 22 }}
+            fontSize={fitFontSize(
+              value,
+              hero ? { xs: 24, md: 30 } : { xs: 18, md: 22 },
+            )}
             fontWeight={hero ? 800 : 700}
             color={valueColor}
             lineHeight={1.15}
             mt={0.5}
-            sx={{ wordBreak: 'break-word' }}
+            title={value}
+            sx={{
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
           >
             {value}
           </Typography>
