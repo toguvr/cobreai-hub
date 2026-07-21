@@ -56,6 +56,8 @@ interface Registration {
   status: Status;
   rejection_reason?: string | null;
   approved_at?: string | null;
+  contract_envelope_id?: string | null;
+  contract_sent_at?: string | null;
   created_at: string;
   user?: UserBrief;
 }
@@ -263,6 +265,52 @@ export default function Registrations() {
       toast.error(
         e?.response?.data?.message || 'Erro ao aprovar. Tente novamente.',
       );
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const sendContract = async (force = false) => {
+    if (!selected || !current?.id) return;
+    setActing(true);
+    try {
+      const res = await api.post<{
+        envelope_id: string;
+        user_enterprise: Registration;
+      }>(`/enterprise/${current.id}/registrations/${selected.id}/contract`, {
+        force,
+      });
+      toast.success(
+        'Contrato gerado. O médico recebeu o e-mail do ClickSign pra assinar.',
+      );
+      // Atualiza o item selecionado com os novos campos pra refletir
+      // no modal sem re-fetch (envelope_id/sent_at).
+      setSelected(prev =>
+        prev
+          ? {
+              ...prev,
+              contract_envelope_id: res.data.envelope_id,
+              contract_sent_at: new Date().toISOString(),
+            }
+          : prev,
+      );
+      await load();
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const msg = e?.response?.data?.message;
+      if (status === 409) {
+        // Já enviou — pergunta se quer reenviar.
+        if (
+          window.confirm(
+            'Contrato já foi enviado antes. Deseja gerar um novo envelope e reenviar?',
+          )
+        ) {
+          await sendContract(true);
+          return;
+        }
+      } else {
+        toast.error(msg || 'Erro ao gerar contrato. Tente novamente.');
+      }
     } finally {
       setActing(false);
     }
@@ -608,6 +656,16 @@ export default function Registrations() {
                   {new Date(selected.approved_at).toLocaleString('pt-BR')}.
                 </Alert>
               )}
+              {selected.status === 'approved' &&
+                selected.contract_sent_at && (
+                  <Alert severity="info">
+                    Contrato enviado em{' '}
+                    {new Date(selected.contract_sent_at).toLocaleString(
+                      'pt-BR',
+                    )}
+                    . O médico recebeu o e-mail do ClickSign pra assinar.
+                  </Alert>
+                )}
             </Stack>
           )}
         </DialogContent>
@@ -635,6 +693,19 @@ export default function Registrations() {
                 {acting ? 'Aprovando…' : 'Aprovar'}
               </Button>
             </>
+          )}
+          {selected?.status === 'approved' && (
+            <Button
+              variant="contained"
+              onClick={() => sendContract(false)}
+              disabled={acting}
+            >
+              {acting
+                ? 'Gerando…'
+                : selected.contract_sent_at
+                ? 'Reenviar contrato'
+                : 'Gerar contrato'}
+            </Button>
           )}
         </DialogActions>
       </Dialog>
