@@ -101,6 +101,13 @@ interface RegistrationLink {
   created_at: string;
 }
 
+interface ContractTemplate {
+  id: string;
+  name: string;
+  clicksign_template_key: string;
+  description: string | null;
+}
+
 export default function Registrations() {
   const { current } = useEnterprise();
   const [tab, setTab] = useState<Status>('pending');
@@ -127,6 +134,11 @@ export default function Registrations() {
   const [newLinkBankMode, setNewLinkBankMode] = useState<BankMode>('none');
   const [newLinkExpiresDays, setNewLinkExpiresDays] = useState<string>('30');
   const [creatingLink, setCreatingLink] = useState(false);
+
+  // Modelos de contrato cadastrados na empresa (pra dropdown do
+  // botão "Gerar contrato"). Carregados junto com o resto da tela.
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   const loadLinks = async () => {
     if (!current?.id) return;
@@ -232,6 +244,28 @@ export default function Registrations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
+  useEffect(() => {
+    if (!current?.id) return;
+    (async () => {
+      try {
+        const res = await api.get<ContractTemplate[]>(
+          `/enterprise/${current.id}/contract-templates`,
+        );
+        setTemplates(res.data ?? []);
+        // Se só tem 1, seleciona automaticamente pra economizar clique.
+        if ((res.data ?? []).length === 1) {
+          setSelectedTemplateId(res.data![0].id);
+        } else {
+          setSelectedTemplateId('');
+        }
+      } catch {
+        // silencioso: se falhar, o botão de gerar contrato mostra
+        // "configure em /configurações" quando o admin abrir o modal.
+        setTemplates([]);
+      }
+    })();
+  }, [current?.id]);
+
   const openDetails = async (item: Registration) => {
     setSelected(item);
     setDocs([]);
@@ -272,12 +306,17 @@ export default function Registrations() {
 
   const sendContract = async (force = false) => {
     if (!selected || !current?.id) return;
+    if (!selectedTemplateId) {
+      toast.warning('Selecione um modelo de contrato antes.');
+      return;
+    }
     setActing(true);
     try {
       const res = await api.post<{
         envelope_id: string;
         user_enterprise: Registration;
       }>(`/enterprise/${current.id}/registrations/${selected.id}/contract`, {
+        template_id: selectedTemplateId,
         force,
       });
       toast.success(
@@ -694,11 +733,33 @@ export default function Registrations() {
               </Button>
             </>
           )}
-          {selected?.status === 'approved' && (
+          {selected?.status === 'approved' && templates.length === 0 && (
+            <Typography fontSize={11} color="text.secondary" mr={1}>
+              Cadastre um modelo em Configurações → Contratos.
+            </Typography>
+          )}
+          {selected?.status === 'approved' && templates.length > 1 && (
+            <TextField
+              select
+              size="small"
+              label="Modelo"
+              value={selectedTemplateId}
+              onChange={e => setSelectedTemplateId(e.target.value)}
+              sx={{ minWidth: 180 }}
+              disabled={acting}
+            >
+              {templates.map(t => (
+                <MenuItem key={t.id} value={t.id}>
+                  {t.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+          {selected?.status === 'approved' && templates.length >= 1 && (
             <Button
               variant="contained"
               onClick={() => sendContract(false)}
-              disabled={acting}
+              disabled={acting || !selectedTemplateId}
             >
               {acting
                 ? 'Gerando…'

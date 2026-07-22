@@ -20,6 +20,7 @@ import { toast } from 'react-toastify';
 import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
 import api from '../../services/api';
+import ClickSignSection from './ClickSignSection';
 
 interface ExpertiseRow {
   id: string;
@@ -198,6 +199,10 @@ export default function Settings() {
             Você está no modo somente leitura. Apenas administradores da empresa
             (org_admin) podem trancar/destrancar configurações.
           </Alert>
+        )}
+
+        {enterpriseId && isOrgAdmin && (
+          <ClickSignSection enterpriseId={enterpriseId} canEdit={isOrgAdmin} />
         )}
 
         {!loading && rows.length > 0 && (
