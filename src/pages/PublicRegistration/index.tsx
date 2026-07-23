@@ -94,8 +94,10 @@ interface FormData {
   cpf: string;
   rg: string;
   crm: string;
+  crm_uf: string;
   sus: string;
   birthday: string; // yyyy-mm-dd
+  mother_name: string;
   cep: string;
   street: string;
   number: string;
@@ -107,7 +109,8 @@ interface FormData {
 
 const EMPTY_FORM: FormData = {
   name: '', email: '', cellphone: '',
-  cpf: '', rg: '', crm: '', sus: '', birthday: '',
+  cpf: '', rg: '', crm: '', crm_uf: '', sus: '', birthday: '',
+  mother_name: '',
   cep: '', street: '', number: '', complemento: '',
   bairro: '', cidade: '', uf: '',
 };
@@ -234,7 +237,7 @@ interface FieldErrors {
 // o que ele ainda NÃO tem — só esses aparecem no form. Os demais
 // somem porque são reaproveitados da conta.
 const KNOWABLE_USER_FIELDS = [
-  'cpf', 'rg', 'crm', 'sus', 'birthday', 'cellphone',
+  'cpf', 'rg', 'crm', 'crm_uf', 'sus', 'birthday', 'mother_name', 'cellphone',
   'cep', 'street', 'number', 'bairro', 'cidade', 'uf',
 ] as const;
 type UserField = typeof KNOWABLE_USER_FIELDS[number];
@@ -452,8 +455,10 @@ export default function PublicRegistration() {
         !needsField('cpf') &&
         !needsField('rg') &&
         !needsField('crm') &&
+        !needsField('crm_uf') &&
         !needsField('sus') &&
-        !needsField('birthday')
+        !needsField('birthday') &&
+        !needsField('mother_name')
       );
     }
     if (s === 2) {
@@ -611,7 +616,9 @@ export default function PublicRegistration() {
         cpf: onlyDigits(form.cpf) || undefined,
         rg: form.rg || undefined,
         crm: form.crm || undefined,
+        crm_uf: form.crm_uf || undefined,
         sus: onlyDigits(form.sus) || undefined,
+        mother_name: form.mother_name?.trim() || undefined,
         // birthday no form é DD/MM/AAAA; convertemos pra ISO
         // yyyy-mm-dd que é o que o back grava.
         birthday: birthdayToISO(form.birthday),
@@ -842,19 +849,43 @@ export default function PublicRegistration() {
                   />
                 );
               })()}
-              {needsField('crm') && (
-                <TextField
-                  label="CRM"
-                  fullWidth
-                  value={form.crm}
-                  onChange={e => {
-                    set('crm', e.target.value);
-                    debouncedCheckField('crm', e.target.value);
-                  }}
-                  onBlur={() => checkField('crm', form.crm)}
-                  error={errorFor('crm')}
-                  helperText={helperFor('crm')}
-                />
+              {(needsField('crm') || needsField('crm_uf')) && (
+                <Stack direction="row" gap={2}>
+                  {needsField('crm') && (
+                    <TextField
+                      label="CRM (número)"
+                      value={form.crm}
+                      onChange={e => {
+                        // aceita só dígitos pra o contrato ficar limpo
+                        set('crm', e.target.value.replace(/\D/g, '').slice(0, 10));
+                        debouncedCheckField('crm', e.target.value);
+                      }}
+                      onBlur={() => checkField('crm', form.crm)}
+                      error={errorFor('crm')}
+                      helperText={helperFor('crm')}
+                      inputProps={{ inputMode: 'numeric' }}
+                      sx={{ flex: 2 }}
+                    />
+                  )}
+                  {needsField('crm_uf') && (
+                    <TextField
+                      label="UF do CRM"
+                      value={form.crm_uf}
+                      onChange={e =>
+                        set(
+                          'crm_uf',
+                          e.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z]/g, '')
+                            .slice(0, 2),
+                        )
+                      }
+                      inputProps={{ maxLength: 2 }}
+                      placeholder="MG"
+                      sx={{ flex: 1 }}
+                    />
+                  )}
+                </Stack>
               )}
               {needsField('sus') && (
                 <TextField
@@ -889,6 +920,15 @@ export default function PublicRegistration() {
                       ? 'Data inválida'
                       : undefined
                   }
+                />
+              )}
+              {needsField('mother_name') && (
+                <TextField
+                  label="Nome da mãe"
+                  fullWidth
+                  value={form.mother_name}
+                  onChange={e => set('mother_name', e.target.value)}
+                  helperText="Usado em contratos oficiais."
                 />
               )}
             </Stack>
