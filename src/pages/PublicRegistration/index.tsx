@@ -17,10 +17,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import axios from 'axios';
+import { BRAZILIAN_BANKS } from '../../data/banks';
 
 const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333',
@@ -1228,25 +1230,62 @@ function BankFields({
   value: { bank_code: string; bank_name: string; agency: string; account: string };
   onChange: (patch: Partial<typeof value>) => void;
 }) {
+  // Objeto atual "casado" com um item da lista, se der match. Se o
+  // médico digitou um banco que não está na lista, cai em null e
+  // freeSolo mantém o texto que ele digitou como bank_name.
+  const currentBank = BRAZILIAN_BANKS.find(
+    b => b.code === value.bank_code,
+  ) ?? null;
+
   return (
     <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <TextField
-          label="Código do banco"
-          value={value.bank_code}
-          onChange={e =>
-            onChange({ bank_code: e.target.value.replace(/\D/g, '').slice(0, 5) })
+      <Autocomplete
+        freeSolo
+        options={BRAZILIAN_BANKS}
+        value={currentBank}
+        // O input textual mostra o nome do banco (ou o que o
+        // médico digitou pra buscar). freeSolo permite salvar
+        // sem match exato.
+        inputValue={value.bank_name}
+        onInputChange={(_e, v) => onChange({ bank_name: v })}
+        onChange={(_e, opt) => {
+          if (opt && typeof opt !== 'string') {
+            // Selecionou item da lista — preenche os dois campos.
+            onChange({ bank_code: opt.code, bank_name: opt.name });
+          } else if (typeof opt === 'string') {
+            // Digitou algo livre — mantém como bank_name e zera o code.
+            onChange({ bank_code: '', bank_name: opt });
+          } else {
+            // Limpou.
+            onChange({ bank_code: '', bank_name: '' });
           }
-          sx={{ flex: 1 }}
-          inputProps={{ inputMode: 'numeric' }}
-        />
-        <TextField
-          label="Nome do banco"
-          value={value.bank_name}
-          onChange={e => onChange({ bank_name: e.target.value })}
-          sx={{ flex: 2 }}
-        />
-      </Stack>
+        }}
+        getOptionLabel={opt =>
+          typeof opt === 'string' ? opt : `${opt.code} — ${opt.name}`
+        }
+        isOptionEqualToValue={(a, b) => a.code === b.code}
+        filterOptions={(opts, { inputValue }) => {
+          const q = inputValue.trim().toLowerCase();
+          if (!q) return opts;
+          const qDigits = q.replace(/\D/g, '');
+          return opts.filter(b => {
+            if (qDigits && b.code.startsWith(qDigits)) return true;
+            return b.name.toLowerCase().includes(q);
+          });
+        }}
+        renderInput={params => (
+          <TextField
+            {...params}
+            label="Banco"
+            placeholder="Buscar por código ou nome…"
+            helperText={
+              value.bank_code
+                ? `Código COMPE: ${value.bank_code}`
+                : 'Digite pelo menos 2 letras pra buscar'
+            }
+          />
+        )}
+      />
       <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
         <TextField
           label="Agência"
