@@ -17,10 +17,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import axios from 'axios';
+import { BRAZILIAN_BANKS } from '../../data/banks';
 
 const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333',
@@ -94,8 +96,10 @@ interface FormData {
   cpf: string;
   rg: string;
   crm: string;
+  crm_uf: string;
   sus: string;
   birthday: string; // yyyy-mm-dd
+  mother_name: string;
   cep: string;
   street: string;
   number: string;
@@ -107,7 +111,8 @@ interface FormData {
 
 const EMPTY_FORM: FormData = {
   name: '', email: '', cellphone: '',
-  cpf: '', rg: '', crm: '', sus: '', birthday: '',
+  cpf: '', rg: '', crm: '', crm_uf: '', sus: '', birthday: '',
+  mother_name: '',
   cep: '', street: '', number: '', complemento: '',
   bairro: '', cidade: '', uf: '',
 };
@@ -234,7 +239,7 @@ interface FieldErrors {
 // o que ele ainda NÃO tem — só esses aparecem no form. Os demais
 // somem porque são reaproveitados da conta.
 const KNOWABLE_USER_FIELDS = [
-  'cpf', 'rg', 'crm', 'sus', 'birthday', 'cellphone',
+  'cpf', 'rg', 'crm', 'crm_uf', 'sus', 'birthday', 'mother_name', 'cellphone',
   'cep', 'street', 'number', 'bairro', 'cidade', 'uf',
 ] as const;
 type UserField = typeof KNOWABLE_USER_FIELDS[number];
@@ -452,8 +457,10 @@ export default function PublicRegistration() {
         !needsField('cpf') &&
         !needsField('rg') &&
         !needsField('crm') &&
+        !needsField('crm_uf') &&
         !needsField('sus') &&
-        !needsField('birthday')
+        !needsField('birthday') &&
+        !needsField('mother_name')
       );
     }
     if (s === 2) {
@@ -611,7 +618,9 @@ export default function PublicRegistration() {
         cpf: onlyDigits(form.cpf) || undefined,
         rg: form.rg || undefined,
         crm: form.crm || undefined,
+        crm_uf: form.crm_uf || undefined,
         sus: onlyDigits(form.sus) || undefined,
+        mother_name: form.mother_name?.trim() || undefined,
         // birthday no form é DD/MM/AAAA; convertemos pra ISO
         // yyyy-mm-dd que é o que o back grava.
         birthday: birthdayToISO(form.birthday),
@@ -842,19 +851,43 @@ export default function PublicRegistration() {
                   />
                 );
               })()}
-              {needsField('crm') && (
-                <TextField
-                  label="CRM"
-                  fullWidth
-                  value={form.crm}
-                  onChange={e => {
-                    set('crm', e.target.value);
-                    debouncedCheckField('crm', e.target.value);
-                  }}
-                  onBlur={() => checkField('crm', form.crm)}
-                  error={errorFor('crm')}
-                  helperText={helperFor('crm')}
-                />
+              {(needsField('crm') || needsField('crm_uf')) && (
+                <Stack direction="row" gap={2}>
+                  {needsField('crm') && (
+                    <TextField
+                      label="CRM (número)"
+                      value={form.crm}
+                      onChange={e => {
+                        // aceita só dígitos pra o contrato ficar limpo
+                        set('crm', e.target.value.replace(/\D/g, '').slice(0, 10));
+                        debouncedCheckField('crm', e.target.value);
+                      }}
+                      onBlur={() => checkField('crm', form.crm)}
+                      error={errorFor('crm')}
+                      helperText={helperFor('crm')}
+                      inputProps={{ inputMode: 'numeric' }}
+                      sx={{ flex: 2 }}
+                    />
+                  )}
+                  {needsField('crm_uf') && (
+                    <TextField
+                      label="UF do CRM"
+                      value={form.crm_uf}
+                      onChange={e =>
+                        set(
+                          'crm_uf',
+                          e.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z]/g, '')
+                            .slice(0, 2),
+                        )
+                      }
+                      inputProps={{ maxLength: 2 }}
+                      placeholder="MG"
+                      sx={{ flex: 1 }}
+                    />
+                  )}
+                </Stack>
               )}
               {needsField('sus') && (
                 <TextField
@@ -889,6 +922,15 @@ export default function PublicRegistration() {
                       ? 'Data inválida'
                       : undefined
                   }
+                />
+              )}
+              {needsField('mother_name') && (
+                <TextField
+                  label="Nome da mãe"
+                  fullWidth
+                  value={form.mother_name}
+                  onChange={e => set('mother_name', e.target.value)}
+                  helperText="Usado em contratos oficiais."
                 />
               )}
             </Stack>
@@ -1188,25 +1230,62 @@ function BankFields({
   value: { bank_code: string; bank_name: string; agency: string; account: string };
   onChange: (patch: Partial<typeof value>) => void;
 }) {
+  // Objeto atual "casado" com um item da lista, se der match. Se o
+  // médico digitou um banco que não está na lista, cai em null e
+  // freeSolo mantém o texto que ele digitou como bank_name.
+  const currentBank = BRAZILIAN_BANKS.find(
+    b => b.code === value.bank_code,
+  ) ?? null;
+
   return (
     <>
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
-        <TextField
-          label="Código do banco"
-          value={value.bank_code}
-          onChange={e =>
-            onChange({ bank_code: e.target.value.replace(/\D/g, '').slice(0, 5) })
+      <Autocomplete
+        freeSolo
+        options={BRAZILIAN_BANKS}
+        value={currentBank}
+        // O input textual mostra o nome do banco (ou o que o
+        // médico digitou pra buscar). freeSolo permite salvar
+        // sem match exato.
+        inputValue={value.bank_name}
+        onInputChange={(_e, v) => onChange({ bank_name: v })}
+        onChange={(_e, opt) => {
+          if (opt && typeof opt !== 'string') {
+            // Selecionou item da lista — preenche os dois campos.
+            onChange({ bank_code: opt.code, bank_name: opt.name });
+          } else if (typeof opt === 'string') {
+            // Digitou algo livre — mantém como bank_name e zera o code.
+            onChange({ bank_code: '', bank_name: opt });
+          } else {
+            // Limpou.
+            onChange({ bank_code: '', bank_name: '' });
           }
-          sx={{ flex: 1 }}
-          inputProps={{ inputMode: 'numeric' }}
-        />
-        <TextField
-          label="Nome do banco"
-          value={value.bank_name}
-          onChange={e => onChange({ bank_name: e.target.value })}
-          sx={{ flex: 2 }}
-        />
-      </Stack>
+        }}
+        getOptionLabel={opt =>
+          typeof opt === 'string' ? opt : `${opt.code} — ${opt.name}`
+        }
+        isOptionEqualToValue={(a, b) => a.code === b.code}
+        filterOptions={(opts, { inputValue }) => {
+          const q = inputValue.trim().toLowerCase();
+          if (!q) return opts;
+          const qDigits = q.replace(/\D/g, '');
+          return opts.filter(b => {
+            if (qDigits && b.code.startsWith(qDigits)) return true;
+            return b.name.toLowerCase().includes(q);
+          });
+        }}
+        renderInput={params => (
+          <TextField
+            {...params}
+            label="Banco"
+            placeholder="Buscar por código ou nome…"
+            helperText={
+              value.bank_code
+                ? `Código COMPE: ${value.bank_code}`
+                : 'Digite pelo menos 2 letras pra buscar'
+            }
+          />
+        )}
+      />
       <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
         <TextField
           label="Agência"

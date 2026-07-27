@@ -117,6 +117,7 @@ export default function Registrations() {
   // Modal de detalhes + ações
   const [selected, setSelected] = useState<Registration | null>(null);
   const [docs, setDocs] = useState<UserDoc[]>([]);
+  const [removingDocId, setRemovingDocId] = useState<string | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [acting, setActing] = useState(false);
 
@@ -301,6 +302,31 @@ export default function Registrations() {
       );
     } finally {
       setActing(false);
+    }
+  };
+
+  const removeDoc = async (doc: UserDoc) => {
+    if (!current?.id) return;
+    const label = doc.enterpriseDocumentType?.name ?? 'documento';
+    if (
+      !window.confirm(
+        `Remover "${label}"? O médico precisará reenviar esse documento.`,
+      )
+    )
+      return;
+    setRemovingDocId(doc.id);
+    try {
+      await api.delete(
+        `/enterprise/${current.id}/user-documents/${doc.id}`,
+      );
+      setDocs(prev => prev.filter(d => d.id !== doc.id));
+      toast.success('Documento removido.');
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao remover documento.',
+      );
+    } finally {
+      setRemovingDocId(null);
     }
   };
 
@@ -659,8 +685,9 @@ export default function Registrations() {
                         direction="row"
                         justifyContent="space-between"
                         alignItems="center"
+                        spacing={1}
                       >
-                        <Typography fontSize={13}>
+                        <Typography fontSize={13} flex={1} minWidth={0}>
                           {d.enterpriseDocumentType?.name ?? '(sem tipo)'}
                           {d.enterpriseDocumentType?.required && ' *'}
                         </Typography>
@@ -678,6 +705,16 @@ export default function Registrations() {
                             sem arquivo
                           </Typography>
                         )}
+                        <Tooltip title="Remover — o médico pode reenviar depois">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            disabled={removingDocId === d.id}
+                            onClick={() => removeDoc(d)}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </Stack>
                     ))}
                   </Stack>
