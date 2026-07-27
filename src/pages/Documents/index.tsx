@@ -34,7 +34,15 @@ interface DocType {
   id: string;
   enterprise_id: string;
   name: string;
+  /**
+   * Fluxo antigo (link "sem dados bancários" ou rota /public/enterprise/:id
+   * sem token). É o default que já existia.
+   */
   required: boolean;
+  /** Obrigatório em links bank_mode='pf' ou 'both'. */
+  required_pf: boolean;
+  /** Obrigatório em links bank_mode='pj' ou 'both'. */
+  required_pj: boolean;
 }
 
 /**
@@ -51,6 +59,8 @@ export default function Documents() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [name, setName] = useState('');
   const [required, setRequired] = useState(false);
+  const [requiredPf, setRequiredPf] = useState(false);
+  const [requiredPj, setRequiredPj] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState<DocType | null>(null);
@@ -82,6 +92,8 @@ export default function Documents() {
     setEditing(null);
     setName('');
     setRequired(false);
+    setRequiredPf(false);
+    setRequiredPj(false);
     setDialogOpen(true);
   };
 
@@ -89,6 +101,8 @@ export default function Documents() {
     setEditing(item);
     setName(item.name);
     setRequired(item.required);
+    setRequiredPf(item.required_pf);
+    setRequiredPj(item.required_pj);
     setDialogOpen(true);
   };
 
@@ -100,17 +114,20 @@ export default function Documents() {
     if (!current?.id) return;
     setSaving(true);
     try {
+      const body = {
+        name: name.trim(),
+        required,
+        required_pf: requiredPf,
+        required_pj: requiredPj,
+      };
       if (editing) {
         await api.put(
           `/enterprise/${current.id}/document-types/${editing.id}`,
-          { name: name.trim(), required },
+          body,
         );
         toast.success('Tipo de documento atualizado.');
       } else {
-        await api.post(`/enterprise/${current.id}/document-types`, {
-          name: name.trim(),
-          required,
-        });
+        await api.post(`/enterprise/${current.id}/document-types`, body);
         toast.success('Tipo de documento criado.');
       }
       setDialogOpen(false);
@@ -126,23 +143,29 @@ export default function Documents() {
   };
 
   // Toggle inline pra não obrigar o admin a abrir modal só pra
-  // marcar/desmarcar required.
-  const toggleRequired = async (item: DocType) => {
+  // marcar/desmarcar cada flag. `field` é required/required_pf/required_pj.
+  const toggleFlag = async (
+    item: DocType,
+    field: 'required' | 'required_pf' | 'required_pj',
+  ) => {
     if (!current?.id) return;
+    const newValue = !item[field];
     // Otimista: atualiza UI e reverte se der ruim.
     setItems(prev =>
-      prev.map(i => (i.id === item.id ? { ...i, required: !i.required } : i)),
+      prev.map(i => (i.id === item.id ? { ...i, [field]: newValue } : i)),
     );
     try {
       await api.put(`/enterprise/${current.id}/document-types/${item.id}`, {
-        required: !item.required,
+        [field]: newValue,
       });
     } catch (e: any) {
       toast.error(
         e?.response?.data?.message || 'Erro ao atualizar obrigatório.',
       );
       setItems(prev =>
-        prev.map(i => (i.id === item.id ? { ...i, required: item.required } : i)),
+        prev.map(i =>
+          i.id === item.id ? { ...i, [field]: item[field] } : i,
+        ),
       );
     }
   };
@@ -179,8 +202,15 @@ export default function Documents() {
             </Typography>
             <Typography color="text.secondary" fontSize={14}>
               Defina os tipos de documento que os médicos precisam enviar
-              ao se cadastrar. Marque como <b>obrigatório</b> os que
-              bloqueiam o envio do cadastro.
+              ao se cadastrar. Cada tipo pode ser obrigatório por modo do
+              link de convite:
+              {' '}
+              <b>Padrão</b> (link sem dados bancários / fluxo antigo),
+              {' '}
+              <b>PF</b> (link Pessoa Física) e/ou
+              {' '}
+              <b>PJ</b> (link Pessoa Jurídica). Link "Ambos" pede o
+              que estiver marcado em PF <i>ou</i> PJ.
             </Typography>
           </Box>
           <Button
@@ -206,7 +236,15 @@ export default function Documents() {
               <TableHead>
                 <TableRow>
                   <TableCell>Nome</TableCell>
-                  <TableCell align="center">Obrigatório</TableCell>
+                  <Tooltip title="Obrigatório no fluxo antigo / link sem dados bancários">
+                    <TableCell align="center">Padrão</TableCell>
+                  </Tooltip>
+                  <Tooltip title="Obrigatório em links PF">
+                    <TableCell align="center">PF</TableCell>
+                  </Tooltip>
+                  <Tooltip title="Obrigatório em links PJ">
+                    <TableCell align="center">PJ</TableCell>
+                  </Tooltip>
                   <TableCell align="right">Ações</TableCell>
                 </TableRow>
               </TableHead>
@@ -216,8 +254,23 @@ export default function Documents() {
                     <TableCell>{item.name}</TableCell>
                     <TableCell align="center">
                       <Switch
+                        size="small"
                         checked={item.required}
-                        onChange={() => toggleRequired(item)}
+                        onChange={() => toggleFlag(item, 'required')}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Switch
+                        size="small"
+                        checked={item.required_pf}
+                        onChange={() => toggleFlag(item, 'required_pf')}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Switch
+                        size="small"
+                        checked={item.required_pj}
+                        onChange={() => toggleFlag(item, 'required_pj')}
                       />
                     </TableCell>
                     <TableCell align="right">
@@ -263,6 +316,10 @@ export default function Documents() {
               fullWidth
               placeholder="Ex.: Diploma de graduação"
             />
+            <Typography fontSize={12} color="text.secondary">
+              Marque em quais modos de credenciamento este documento é
+              obrigatório:
+            </Typography>
             <FormControlLabel
               control={
                 <Switch
@@ -270,7 +327,25 @@ export default function Documents() {
                   onChange={e => setRequired(e.target.checked)}
                 />
               }
-              label="Obrigatório no credenciamento"
+              label="Padrão (link sem dados bancários)"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={requiredPf}
+                  onChange={e => setRequiredPf(e.target.checked)}
+                />
+              }
+              label="Link Pessoa Física"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={requiredPj}
+                  onChange={e => setRequiredPj(e.target.checked)}
+                />
+              }
+              label="Link Pessoa Jurídica"
             />
           </Stack>
         </DialogContent>
