@@ -21,6 +21,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import DescriptionIcon from '@mui/icons-material/Description';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -34,6 +35,7 @@ const navItems = [
   { label: 'Membros', icon: <PeopleIcon />, path: '/usuarios' },
   { label: 'Credenciamento', icon: <HowToRegIcon />, path: '/credenciamento' },
   { label: 'Documentos', icon: <DescriptionIcon />, path: '/documentos' },
+  { label: 'Benefícios', icon: <CardGiftcardIcon />, path: '/beneficios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
   { label: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes' },
