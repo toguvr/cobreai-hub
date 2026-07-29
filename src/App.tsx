@@ -17,6 +17,7 @@ import Prices from './pages/Prices';
 import Settings from './pages/Settings';
 import Documents from './pages/Documents';
 import Registrations from './pages/Registrations';
+import Benefits from './pages/Benefits';
 import PublicRegistration from './pages/PublicRegistration';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -102,6 +103,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Registrations />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/beneficios"
+        element={
+          <PrivateRoute>
+            <Benefits />
           </PrivateRoute>
         }
       />

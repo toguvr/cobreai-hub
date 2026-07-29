@@ -295,6 +295,10 @@ export default function PublicRegistration() {
   const [emailMissingFields, setEmailMissingFields] = useState<UserField[]>(
     [...KNOWABLE_USER_FIELDS],
   );
+  // IDs de doc_types que o user JÁ enviou pra esta empresa. Vem no
+  // /check?field=email quando o e-mail existe. Se o admin removeu um
+  // doc, ele NÃO estará nesta lista, e a etapa Anexos pede só ele.
+  const [existingDocTypeIds, setExistingDocTypeIds] = useState<string[]>([]);
 
   // Loading do viacep
   const [cepLoading, setCepLoading] = useState(false);
@@ -367,9 +371,14 @@ export default function PublicRegistration() {
           `/public/enterprise/${enterprise_id}/registration/check`,
           { params },
         );
-        const { available, existing_user_missing_fields } = res.data as {
+        const {
+          available,
+          existing_user_missing_fields,
+          existing_user_doc_type_ids,
+        } = res.data as {
           available: boolean;
           existing_user_missing_fields?: string[];
+          existing_user_doc_type_ids?: string[];
         };
 
         if (field === 'email') {
@@ -381,11 +390,13 @@ export default function PublicRegistration() {
                   (KNOWABLE_USER_FIELDS as readonly string[]).includes(f),
               ),
             );
+            setExistingDocTypeIds(existing_user_doc_type_ids ?? []);
             setFieldStatus(s => ({ ...s, email: 'ok' }));
             setFieldErrors(e => ({ ...e, email: undefined }));
           } else {
             setEmailFoundExisting(false);
             setEmailMissingFields([...KNOWABLE_USER_FIELDS]);
+            setExistingDocTypeIds([]);
             setFieldStatus(s => ({ ...s, email: 'ok' }));
             setFieldErrors(e => ({ ...e, email: undefined }));
           }
@@ -514,7 +525,13 @@ export default function PublicRegistration() {
       (onlyDigits(form.cellphone).length >= 10 &&
         fieldStatus.cellphone !== 'taken'));
 
-  const docsValid = requiredDocs.every(d => files[d.id]);
+  // Um doc obrigatório está "resolvido" se: acabou de ser anexado
+  // OU já existia no back (existingDocTypeIds). O 2º caso permite
+  // que o médico volte pra reenviar SÓ o doc que o admin removeu,
+  // sem re-anexar todos os que já estão no servidor.
+  const docsValid = requiredDocs.every(
+    d => !!files[d.id] || existingDocTypeIds.includes(d.id),
+  );
 
   const hasTakenField = (fields: string[]) =>
     fields.some(f => fieldStatus[f] === 'taken');
@@ -1038,11 +1055,21 @@ export default function PublicRegistration() {
                   siga pra próxima etapa.
                 </Alert>
               )}
+              {emailFoundExisting && existingDocTypeIds.length > 0 && (
+                <Alert severity="success">
+                  Já recebemos {existingDocTypeIds.length}{' '}
+                  {existingDocTypeIds.length === 1
+                    ? 'documento seu'
+                    : 'documentos seus'}
+                  . Envie só os que aparecem sem "já enviado".
+                </Alert>
+              )}
               {[...requiredDocs, ...optionalDocs].map(doc => (
                 <DocRow
                   key={doc.id}
                   doc={doc}
                   file={files[doc.id]}
+                  alreadyUploaded={existingDocTypeIds.includes(doc.id)}
                   inputRef={el => (fileInputRefs.current[doc.id] = el)}
                   onPick={file => handleFilePick(doc.id, file)}
                 />
@@ -1148,14 +1175,26 @@ export default function PublicRegistration() {
 function DocRow({
   doc,
   file,
+  alreadyUploaded,
   inputRef,
   onPick,
 }: {
   doc: DocType;
   file?: File;
+  /**
+   * true quando o back já tem esse doc gravado. O médico ainda pode
+   * substituir (anexar um arquivo) — o back trata o novo upload como
+   * novo registro; o admin decide se apaga o velho.
+   */
+  alreadyUploaded?: boolean;
   inputRef: (el: HTMLInputElement | null) => void;
   onPick: (file: File | null) => void;
 }) {
+  const borderColor = file
+    ? 'success.main'
+    : alreadyUploaded
+    ? 'info.main'
+    : undefined;
   return (
     <Paper
       variant="outlined"
@@ -1164,7 +1203,7 @@ function DocRow({
         display: 'flex',
         alignItems: 'center',
         gap: 1,
-        borderColor: file ? 'success.main' : undefined,
+        borderColor,
       }}
     >
       <Box flex={1} minWidth={0}>
@@ -1179,10 +1218,23 @@ function DocRow({
               sx={{ ml: 1, height: 20 }}
             />
           )}
+          {alreadyUploaded && !file && (
+            <Chip
+              size="small"
+              label="já enviado"
+              color="info"
+              variant="outlined"
+              sx={{ ml: 1, height: 20 }}
+            />
+          )}
         </Typography>
         {file ? (
           <Typography fontSize={12} color="text.secondary" noWrap>
             {file.name} · {(file.size / 1024).toFixed(0)} KB
+          </Typography>
+        ) : alreadyUploaded ? (
+          <Typography fontSize={12} color="info.main">
+            Recebido. Envie um novo só se quiser substituir.
           </Typography>
         ) : (
           <Typography fontSize={12} color="text.secondary">
@@ -1206,7 +1258,7 @@ function DocRow({
             )?.click()
           }
         >
-          Enviar
+          {alreadyUploaded ? 'Substituir' : 'Enviar'}
         </Button>
       )}
       <input
