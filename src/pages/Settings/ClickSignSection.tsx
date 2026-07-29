@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -22,16 +23,26 @@ import { toast } from 'react-toastify';
 
 import api from '../../services/api';
 
+type ContractProvider = 'clicksign' | 'docusign';
+
 interface Template {
   id: string;
   name: string;
   clicksign_template_key: string;
   description: string | null;
+  docusign_role_name: string | null;
 }
 
 interface ClickSignInfo {
   has_token: boolean;
   api_token_masked: string | null;
+  base_url: string | null;
+}
+
+interface DocuSignInfo {
+  has_token: boolean;
+  access_token_masked: string | null;
+  account_id: string | null;
   base_url: string | null;
 }
 
@@ -49,14 +60,24 @@ export default function ClickSignSection({
   canEdit: boolean;
 }) {
   const [info, setInfo] = useState<ClickSignInfo | null>(null);
+  const [dsInfo, setDsInfo] = useState<DocuSignInfo | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
+  const [provider, setProvider] = useState<ContractProvider>('clicksign');
+  const [savingProvider, setSavingProvider] = useState(false);
 
-  // Token editor
+  // ClickSign token editor
   const [tokenDraft, setTokenDraft] = useState('');
   const [baseUrlDraft, setBaseUrlDraft] = useState('');
   const [savingToken, setSavingToken] = useState(false);
   const [editingToken, setEditingToken] = useState(false);
+
+  // DocuSign editor
+  const [dsAccessDraft, setDsAccessDraft] = useState('');
+  const [dsAccountDraft, setDsAccountDraft] = useState('');
+  const [dsBaseUrlDraft, setDsBaseUrlDraft] = useState('');
+  const [savingDs, setSavingDs] = useState(false);
+  const [editingDsToken, setEditingDsToken] = useState(false);
 
   // Template dialog (create/edit)
   const [dlgOpen, setDlgOpen] = useState(false);
@@ -65,28 +86,75 @@ export default function ClickSignSection({
   const [dlgName, setDlgName] = useState('');
   const [dlgKey, setDlgKey] = useState('');
   const [dlgDesc, setDlgDesc] = useState('');
+  const [dlgRole, setDlgRole] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [infoRes, tplRes] = await Promise.all([
+      const [infoRes, dsRes, tplRes, provRes] = await Promise.all([
         api.get<ClickSignInfo>(`/enterprise/${enterpriseId}/clicksign`),
+        api.get<DocuSignInfo>(`/enterprise/${enterpriseId}/docusign`),
         api.get<Template[]>(
           `/enterprise/${enterpriseId}/contract-templates`,
         ),
+        api.get<{ provider: ContractProvider }>(
+          `/enterprise/${enterpriseId}/contract-provider`,
+        ),
       ]);
       setInfo(infoRes.data);
+      setDsInfo(dsRes.data);
       setTemplates(tplRes.data ?? []);
       setBaseUrlDraft(infoRes.data.base_url || '');
+      setDsAccountDraft(dsRes.data.account_id || '');
+      setDsBaseUrlDraft(dsRes.data.base_url || '');
+      setProvider(provRes.data.provider || 'clicksign');
     } catch (e: any) {
       toast.error(
         e?.response?.data?.message ||
-          'Erro ao carregar configuração do ClickSign.',
+          'Erro ao carregar configuração de contratos.',
       );
     } finally {
       setLoading(false);
     }
   }, [enterpriseId]);
+
+  const changeProvider = async (next: ContractProvider) => {
+    setSavingProvider(true);
+    try {
+      await api.patch(`/enterprise/${enterpriseId}/contract-provider`, {
+        provider: next,
+      });
+      setProvider(next);
+      toast.success(
+        `Provider ativo: ${next === 'clicksign' ? 'ClickSign' : 'DocuSign'}.`,
+      );
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao trocar provider.',
+      );
+    } finally {
+      setSavingProvider(false);
+    }
+  };
+
+  const saveDocuSign = async () => {
+    setSavingDs(true);
+    try {
+      const body: Record<string, string | null> = {};
+      if (editingDsToken) body.access_token = dsAccessDraft.trim() || null;
+      body.account_id = dsAccountDraft.trim() || null;
+      body.base_url = dsBaseUrlDraft.trim() || null;
+      await api.patch(`/enterprise/${enterpriseId}/docusign`, body);
+      toast.success('Configuração do DocuSign salva.');
+      setEditingDsToken(false);
+      setDsAccessDraft('');
+      await load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro ao salvar.');
+    } finally {
+      setSavingDs(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -117,6 +185,7 @@ export default function ClickSignSection({
     setDlgName('');
     setDlgKey('');
     setDlgDesc('');
+    setDlgRole('');
     setDlgOpen(true);
   };
 
@@ -125,6 +194,7 @@ export default function ClickSignSection({
     setDlgName(t.name);
     setDlgKey(t.clicksign_template_key);
     setDlgDesc(t.description || '');
+    setDlgRole(t.docusign_role_name || '');
     setDlgOpen(true);
   };
 
@@ -135,10 +205,11 @@ export default function ClickSignSection({
     }
     setDlgSaving(true);
     try {
-      const body = {
+      const body: Record<string, string | null> = {
         name: dlgName.trim(),
         clicksign_template_key: dlgKey.trim(),
         description: dlgDesc.trim() || null,
+        docusign_role_name: dlgRole.trim() || null,
       };
       if (dlgTarget) {
         await api.put(
@@ -185,16 +256,34 @@ export default function ClickSignSection({
       sx={{ p: 2, mb: 2, border: `1px solid ${C.border}`, bgcolor: C.surface }}
       elevation={0}
     >
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ sm: 'center' }}
+        justifyContent="space-between"
+        gap={1}
+        mb={1.5}
+      >
         <Box>
           <Typography fontWeight={700} fontSize={14}>
-            Contratos (ClickSign)
+            Contratos
           </Typography>
           <Typography fontSize={11} color={C.textMuted}>
-            Token da conta e modelos de contrato disponíveis pra emitir após
-            aprovar um credenciamento.
+            Escolha o provider de assinatura e cadastre os modelos usados
+            após aprovar um credenciamento.
           </Typography>
         </Box>
+        <TextField
+          select
+          size="small"
+          label="Provider"
+          value={provider}
+          onChange={e => changeProvider(e.target.value as ContractProvider)}
+          disabled={!canEdit || savingProvider || loading}
+          sx={{ minWidth: 180 }}
+        >
+          <MenuItem value="clicksign">ClickSign</MenuItem>
+          <MenuItem value="docusign">DocuSign</MenuItem>
+        </TextField>
       </Stack>
 
       {loading ? (
@@ -203,10 +292,12 @@ export default function ClickSignSection({
         </Box>
       ) : (
         <Stack gap={2}>
-          {/* ── Token ─────────────────────────────────────────── */}
+          {/* ── ClickSign (só quando provider=clicksign) ────── */}
+          {provider === 'clicksign' && (
+          <>
           <Box>
             <Typography fontSize={12} fontWeight={600} mb={0.5}>
-              Token da API
+              Token da API ClickSign
             </Typography>
             {info?.has_token && !editingToken ? (
               <Stack direction="row" alignItems="center" gap={1}>
@@ -285,8 +376,110 @@ export default function ClickSignSection({
               )}
             </Stack>
           )}
+          </>
+          )}
 
-          {/* ── Templates ─────────────────────────────────────── */}
+          {/* ── DocuSign (só quando provider=docusign) ─────── */}
+          {provider === 'docusign' && (
+          <>
+          <Box>
+            <Typography fontSize={12} fontWeight={600} mb={0.5}>
+              Access Token DocuSign
+            </Typography>
+            {dsInfo?.has_token && !editingDsToken ? (
+              <Stack direction="row" alignItems="center" gap={1}>
+                <Typography
+                  fontSize={13}
+                  fontFamily="monospace"
+                  color="text.secondary"
+                >
+                  {dsInfo.access_token_masked}
+                </Typography>
+                {canEdit && (
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setEditingDsToken(true);
+                      setDsAccessDraft('');
+                    }}
+                  >
+                    Alterar
+                  </Button>
+                )}
+              </Stack>
+            ) : (
+              <Stack gap={1}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="password"
+                  placeholder="Cole aqui o access token OAuth do DocuSign"
+                  value={dsAccessDraft}
+                  onChange={e => setDsAccessDraft(e.target.value)}
+                  disabled={!canEdit || savingDs}
+                />
+                {!dsInfo?.has_token && (
+                  <Typography fontSize={11} color={C.textMuted}>
+                    Sem token, o botão "Gerar contrato" fica bloqueado.
+                  </Typography>
+                )}
+              </Stack>
+            )}
+          </Box>
+
+          <TextField
+            size="small"
+            fullWidth
+            label="Account ID"
+            placeholder="UUID da conta DocuSign"
+            value={dsAccountDraft}
+            onChange={e => setDsAccountDraft(e.target.value)}
+            disabled={!canEdit || savingDs}
+            helperText="Encontre em Admin → API and Keys → API Account ID."
+          />
+
+          <TextField
+            size="small"
+            fullWidth
+            label="Ambiente DocuSign"
+            placeholder="https://demo.docusign.net (sandbox) ou https://na1.docusign.net (prod)"
+            value={dsBaseUrlDraft}
+            onChange={e => setDsBaseUrlDraft(e.target.value)}
+            disabled={!canEdit || savingDs}
+            helperText="Deixe em branco pra usar demo. Prod: na1, eu1, etc."
+          />
+
+          {canEdit &&
+            (editingDsToken ||
+              dsAccountDraft !== (dsInfo?.account_id || '') ||
+              dsBaseUrlDraft !== (dsInfo?.base_url || '')) && (
+              <Stack direction="row" gap={1}>
+                <Button
+                  variant="contained"
+                  onClick={saveDocuSign}
+                  disabled={savingDs}
+                >
+                  {savingDs ? 'Salvando…' : 'Salvar configuração'}
+                </Button>
+                {editingDsToken && (
+                  <Button
+                    onClick={() => {
+                      setEditingDsToken(false);
+                      setDsAccessDraft('');
+                      setDsAccountDraft(dsInfo?.account_id || '');
+                      setDsBaseUrlDraft(dsInfo?.base_url || '');
+                    }}
+                    disabled={savingDs}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+              </Stack>
+            )}
+          </>
+          )}
+
+          {/* ── Templates (comuns) ────────────────────────────── */}
           <Box>
             <Stack
               direction="row"
@@ -389,12 +582,35 @@ export default function ClickSignSection({
             <TextField
               size="small"
               fullWidth
-              label="Chave do modelo no ClickSign"
-              placeholder="uuid do template no ClickSign"
+              label={
+                provider === 'docusign'
+                  ? 'Template ID no DocuSign'
+                  : 'Chave do modelo no ClickSign'
+              }
+              placeholder={
+                provider === 'docusign'
+                  ? 'templateId do DocuSign'
+                  : 'uuid do template no ClickSign'
+              }
               value={dlgKey}
               onChange={e => setDlgKey(e.target.value.trim())}
-              helperText="Pega no dashboard do ClickSign em Modelos."
+              helperText={
+                provider === 'docusign'
+                  ? 'Pega no dashboard do DocuSign em Templates.'
+                  : 'Pega no dashboard do ClickSign em Modelos.'
+              }
             />
+            {provider === 'docusign' && (
+              <TextField
+                size="small"
+                fullWidth
+                label="Role Name (DocuSign)"
+                placeholder="Signer1"
+                value={dlgRole}
+                onChange={e => setDlgRole(e.target.value)}
+                helperText="Deixe em branco pra usar 'Signer1' (padrão)."
+              />
+            )}
             <TextField
               size="small"
               fullWidth
