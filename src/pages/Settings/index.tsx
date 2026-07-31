@@ -21,6 +21,7 @@ import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
 import api from '../../services/api';
 import ClickSignSection from './ClickSignSection';
+import WhatsappConfigSection from './WhatsappConfigSection';
 
 interface ExpertiseRow {
   id: string;
@@ -203,6 +204,13 @@ export default function Settings() {
 
         {enterpriseId && isOrgAdmin && (
           <ClickSignSection enterpriseId={enterpriseId} canEdit={isOrgAdmin} />
+        )}
+
+        {enterpriseId && isOrgAdmin && (
+          <WhatsappConfigSection
+            enterpriseId={enterpriseId}
+            canEdit={isOrgAdmin}
+          />
         )}
 
         {!loading && rows.length > 0 && (
