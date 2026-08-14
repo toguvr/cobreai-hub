@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,10 +28,14 @@ import {
   TableRow,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
 import DownloadIcon from '@mui/icons-material/CloudDownload';
@@ -36,6 +43,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { toast } from 'react-toastify';
 import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -138,6 +147,19 @@ export default function Prices() {
   const [monthKey, setMonthKey] = useState(toMonthKey(new Date()));
   const [closing, setClosing] = useState<EnterpriseClosingData | null>(null);
   const [loadingClosing, setLoadingClosing] = useState(false);
+  // Filtro multi-hospital pro fechamento. Vazio = todos. IDs vêm de
+  // priceList.groups (mesma lista usada pra cadastrar preço).
+  const [closingHospitalFilter, setClosingHospitalFilter] = useState<
+    string[]
+  >([]);
+  // Visão: por hospital (agregado) ou por médico (com breakdown).
+  const [closingView, setClosingView] = useState<'hospital' | 'doctor'>(
+    'hospital',
+  );
+  // Doutores expandidos na visão "por médico" — vê breakdown por hospital.
+  const [expandedDoctors, setExpandedDoctors] = useState<Set<string>>(
+    new Set(),
+  );
 
   const loadPrices = useCallback(async () => {
     if (!current?.id) return;
@@ -162,9 +184,14 @@ export default function Prices() {
     if (!current?.id) return;
     setLoadingClosing(true);
     try {
+      const params: Record<string, unknown> = { month: monthKey };
+      // Só manda hospital_ids quando o admin filtrou; sem = todos.
+      if (closingHospitalFilter.length > 0) {
+        params.hospital_ids = closingHospitalFilter.join(',');
+      }
       const res = await api.get<EnterpriseClosingData>(
         `/enterprise/${current.id}/financial-closing`,
-        { params: { month: monthKey } },
+        { params },
       );
       setClosing(res.data);
     } catch {
@@ -172,7 +199,7 @@ export default function Prices() {
     } finally {
       setLoadingClosing(false);
     }
-  }, [current?.id, monthKey]);
+  }, [current?.id, monthKey, closingHospitalFilter]);
 
   useEffect(() => {
     loadPrices();
@@ -181,6 +208,29 @@ export default function Prices() {
   useEffect(() => {
     if (tab === 1) loadClosing();
   }, [tab, loadClosing]);
+
+  // Lista de hospitais pro multi-select — pega direto da tabela de
+  // preços (evita bater outro endpoint só pra o filtro).
+  const hospitalOptions = useMemo(() => {
+    if (!priceList?.hospitals) return [] as { id: string; name: string }[];
+    return priceList.hospitals
+      .map(g => ({ id: g.hospital_id, name: g.hospital_name ?? '(sem nome)' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [priceList]);
+  const selectedHospitalObjs = useMemo(
+    () => hospitalOptions.filter(h => closingHospitalFilter.includes(h.id)),
+    [hospitalOptions, closingHospitalFilter],
+  );
+
+  const toggleDoctor = (userId: string | null) => {
+    const key = userId ?? '__no_doctor__';
+    setExpandedDoctors(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // ── Ações ─────────────────────────────────────────────────────────
 
@@ -553,30 +603,89 @@ export default function Prices() {
         {/* ════════════ TAB 1: FECHAMENTO ════════════ */}
         {tab === 1 && (
           <Box>
-            {/* Navegação de mês */}
+            {/* Navegação de mês + filtro hospital + toggle de visão */}
             <Stack
               direction="row"
               alignItems="center"
-              gap={1}
+              gap={1.5}
               mb={2}
               flexWrap="wrap"
             >
-              <IconButton
+              <Stack direction="row" alignItems="center" gap={0.5}>
+                <IconButton
+                  size="small"
+                  onClick={() => setMonthKey(addMonth(monthKey, -1))}
+                >
+                  <ChevronLeftIcon />
+                </IconButton>
+                <Typography
+                  fontWeight={600}
+                  sx={{ minWidth: 150, textAlign: 'center' }}
+                >
+                  {monthLabel(monthKey)}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => setMonthKey(addMonth(monthKey, 1))}
+                >
+                  <ChevronRightIcon />
+                </IconButton>
+                {loadingClosing && <CircularProgress size={16} />}
+              </Stack>
+
+              <Autocomplete
+                multiple
                 size="small"
-                onClick={() => setMonthKey(addMonth(monthKey, -1))}
-              >
-                <ChevronLeftIcon />
-              </IconButton>
-              <Typography fontWeight={600} sx={{ minWidth: 150, textAlign: 'center' }}>
-                {monthLabel(monthKey)}
-              </Typography>
-              <IconButton
+                disableCloseOnSelect
+                options={hospitalOptions}
+                value={selectedHospitalObjs}
+                getOptionLabel={o => o.name}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                onChange={(_, value) =>
+                  setClosingHospitalFilter(value.map(v => v.id))
+                }
+                sx={{ minWidth: 280, flex: 1, maxWidth: 520 }}
+                renderOption={(props, option, { selected }) => (
+                  <li {...props}>
+                    <Checkbox
+                      icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
+                      checkedIcon={<CheckBoxIcon fontSize="small" />}
+                      style={{ marginRight: 8 }}
+                      checked={selected}
+                    />
+                    {option.name}
+                  </li>
+                )}
+                renderInput={params => (
+                  <TextField
+                    {...params}
+                    label={
+                      closingHospitalFilter.length === 0
+                        ? 'Todos os hospitais'
+                        : 'Hospitais filtrados'
+                    }
+                    placeholder={
+                      closingHospitalFilter.length === 0
+                        ? 'Selecione pra filtrar…'
+                        : ''
+                    }
+                  />
+                )}
+              />
+
+              <ToggleButtonGroup
+                exclusive
                 size="small"
-                onClick={() => setMonthKey(addMonth(monthKey, 1))}
+                value={closingView}
+                onChange={(_, v) => v && setClosingView(v)}
               >
-                <ChevronRightIcon />
-              </IconButton>
-              {loadingClosing && <CircularProgress size={16} />}
+                <ToggleButton value="hospital" sx={{ textTransform: 'none' }}>
+                  Por hospital
+                </ToggleButton>
+                <ToggleButton value="doctor" sx={{ textTransform: 'none' }}>
+                  Por médico
+                </ToggleButton>
+              </ToggleButtonGroup>
             </Stack>
 
             {loadingClosing && !closing && (
@@ -742,58 +851,259 @@ export default function Prices() {
                   </Paper>
                 </Stack>
 
-                <Paper
-                  sx={{ border: `1px solid ${C.border}`, borderRadius: 2 }}
-                >
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
-                          HOSPITAL
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 700, fontSize: 11 }}
-                        >
-                          PLANTÕES
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 700, fontSize: 11 }}
-                        >
-                          BRUTO
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontWeight: 700, fontSize: 11 }}
-                        >
-                          LÍQUIDO
-                        </TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {closing.rows.map(r => (
-                        <TableRow key={r.hospital_id}>
-                          <TableCell sx={{ fontSize: 13 }}>
-                            {r.hospital_name ?? '—'}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontSize: 13 }}>
-                            {r.appointments}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontSize: 13 }}>
-                            {BRL(r.bruto)}
+                {closingView === 'hospital' && (
+                  <Paper
+                    sx={{ border: `1px solid ${C.border}`, borderRadius: 2 }}
+                  >
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
+                            HOSPITAL
                           </TableCell>
                           <TableCell
                             align="right"
-                            sx={{ fontSize: 13, fontWeight: 600 }}
+                            sx={{ fontWeight: 700, fontSize: 11 }}
                           >
-                            {BRL(r.liquido)}
+                            PLANTÕES
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            BRUTO
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            LÍQUIDO
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Paper>
+                      </TableHead>
+                      <TableBody>
+                        {closing.rows.map(r => (
+                          <TableRow key={r.hospital_id}>
+                            <TableCell sx={{ fontSize: 13 }}>
+                              {r.hospital_name ?? '—'}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontSize: 13 }}>
+                              {r.appointments}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontSize: 13 }}>
+                              {BRL(r.bruto)}
+                            </TableCell>
+                            <TableCell
+                              align="right"
+                              sx={{ fontSize: 13, fontWeight: 600 }}
+                            >
+                              {BRL(r.liquido)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                )}
+
+                {closingView === 'doctor' && (
+                  <Paper
+                    sx={{ border: `1px solid ${C.border}`, borderRadius: 2 }}
+                  >
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ width: 40 }} />
+                          <TableCell sx={{ fontWeight: 700, fontSize: 11 }}>
+                            MÉDICO
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            HOSPITAIS
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            PLANTÕES
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            BRUTO
+                          </TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          >
+                            LÍQUIDO
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {closing.by_doctor.length === 0 && (
+                          <TableRow>
+                            <TableCell
+                              colSpan={6}
+                              sx={{
+                                textAlign: 'center',
+                                color: C.textMuted,
+                                fontSize: 13,
+                                py: 3,
+                              }}
+                            >
+                              Nenhum médico com plantões fechados no período.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {closing.by_doctor.map(d => {
+                          const key = d.user_id ?? '__no_doctor__';
+                          const expanded = expandedDoctors.has(key);
+                          const hasBreakdown = d.by_hospital.length > 1;
+                          return (
+                            <Fragment key={key}>
+                              <TableRow
+                                hover
+                                sx={{
+                                  cursor: hasBreakdown ? 'pointer' : 'default',
+                                }}
+                                onClick={() =>
+                                  hasBreakdown && toggleDoctor(d.user_id)
+                                }
+                              >
+                                <TableCell>
+                                  {hasBreakdown ? (
+                                    <IconButton size="small">
+                                      {expanded ? (
+                                        <KeyboardArrowDownIcon fontSize="small" />
+                                      ) : (
+                                        <KeyboardArrowRightIcon fontSize="small" />
+                                      )}
+                                    </IconButton>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 13 }}>
+                                  {d.user_name ?? '—'}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ fontSize: 13, color: C.textMuted }}
+                                >
+                                  {d.by_hospital.length}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: 13 }}>
+                                  {d.appointments}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontSize: 13 }}>
+                                  {BRL(d.bruto)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ fontSize: 13, fontWeight: 600 }}
+                                >
+                                  {BRL(d.liquido)}
+                                </TableCell>
+                              </TableRow>
+                              {hasBreakdown && (
+                                <TableRow sx={{ '& td': { border: 0 } }}>
+                                  <TableCell
+                                    colSpan={6}
+                                    sx={{ py: 0, bgcolor: C.borderSoft }}
+                                  >
+                                    <Collapse in={expanded} unmountOnExit>
+                                      <Box sx={{ py: 1.5, px: 2 }}>
+                                        <Table size="small">
+                                          <TableHead>
+                                            <TableRow>
+                                              <TableCell
+                                                sx={{
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: C.textMuted,
+                                                }}
+                                              >
+                                                HOSPITAL
+                                              </TableCell>
+                                              <TableCell
+                                                align="right"
+                                                sx={{
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: C.textMuted,
+                                                }}
+                                              >
+                                                PLANTÕES
+                                              </TableCell>
+                                              <TableCell
+                                                align="right"
+                                                sx={{
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: C.textMuted,
+                                                }}
+                                              >
+                                                BRUTO
+                                              </TableCell>
+                                              <TableCell
+                                                align="right"
+                                                sx={{
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: C.textMuted,
+                                                }}
+                                              >
+                                                LÍQUIDO
+                                              </TableCell>
+                                            </TableRow>
+                                          </TableHead>
+                                          <TableBody>
+                                            {d.by_hospital.map(h => (
+                                              <TableRow key={h.hospital_id}>
+                                                <TableCell
+                                                  sx={{ fontSize: 13 }}
+                                                >
+                                                  {h.hospital_name ?? '—'}
+                                                </TableCell>
+                                                <TableCell
+                                                  align="right"
+                                                  sx={{ fontSize: 13 }}
+                                                >
+                                                  {h.appointments}
+                                                </TableCell>
+                                                <TableCell
+                                                  align="right"
+                                                  sx={{ fontSize: 13 }}
+                                                >
+                                                  {BRL(h.bruto)}
+                                                </TableCell>
+                                                <TableCell
+                                                  align="right"
+                                                  sx={{
+                                                    fontSize: 13,
+                                                    fontWeight: 600,
+                                                  }}
+                                                >
+                                                  {BRL(h.liquido)}
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                          </TableBody>
+                                        </Table>
+                                      </Box>
+                                    </Collapse>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                )}
               </Box>
             )}
           </Box>

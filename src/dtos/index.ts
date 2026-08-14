@@ -212,10 +212,27 @@ export interface EnterpriseClosingMissing {
   appointments_affected: number;
 }
 
+/** Total do médico consolidado no período, com breakdown por hospital. */
+export interface EnterpriseClosingDoctorRow {
+  user_id: string | null;
+  user_name: string | null;
+  appointments: number;
+  bruto: number;
+  liquido: number;
+  by_hospital: Array<{
+    hospital_id: string;
+    hospital_name: string | null;
+    appointments: number;
+    bruto: number;
+    liquido: number;
+  }>;
+}
+
 export interface EnterpriseClosingData {
   status: 'ok' | 'partial' | 'incomplete' | 'empty';
   month: string;
   rows: EnterpriseClosingRow[];
+  by_doctor: EnterpriseClosingDoctorRow[];
   totals: { bruto: number; liquido: number; appointments: number };
   missing: EnterpriseClosingMissing[];
 }
