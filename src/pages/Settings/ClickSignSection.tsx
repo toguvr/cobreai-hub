@@ -40,13 +40,19 @@ interface ClickSignInfo {
 }
 
 interface DocuSignInfo {
-  /** true depois do OAuth completo. */
+  /** true depois do OAuth completo (refresh_token guardado). */
   connected: boolean;
+  /** true quando Integration Key + Secret estão cadastrados. */
+  has_credentials: boolean;
+  /** Integration Key mascarada — nunca o valor. */
+  integration_key_masked: string | null;
+  /** Ambiente OAuth cadastrado (demo ou prod). */
+  oauth_base_url: string;
   /** Conta DocuSign selecionada (userinfo default). */
   account_id: string | null;
   /** Base URL do datacenter (ex.: https://na4.docusign.net). */
   base_url: string | null;
-  /** User ID (sub do OAuth) — pra rastreio. */
+  /** User ID (sub do OAuth). */
   user_id: string | null;
   /** ISO da próxima expiração do access_token; refresh é automático. */
   access_token_expires_at: string | null;
@@ -78,9 +84,17 @@ export default function ClickSignSection({
   const [savingToken, setSavingToken] = useState(false);
   const [editingToken, setEditingToken] = useState(false);
 
-  // DocuSign — sem form manual: só botão Conectar/Desconectar.
+  // DocuSign
   const [connectingDs, setConnectingDs] = useState(false);
   const [disconnectingDs, setDisconnectingDs] = useState(false);
+  // Cadastro de credenciais (Integration Key + Secret + ambiente).
+  const [dsIntegrationKey, setDsIntegrationKey] = useState('');
+  const [dsSecretKey, setDsSecretKey] = useState('');
+  const [dsOauthBase, setDsOauthBase] = useState<
+    'https://account-d.docusign.com' | 'https://account.docusign.com'
+  >('https://account-d.docusign.com');
+  const [editingDsCreds, setEditingDsCreds] = useState(false);
+  const [savingDsCreds, setSavingDsCreds] = useState(false);
 
   // Template dialog (create/edit)
   const [dlgOpen, setDlgOpen] = useState(false);
@@ -109,6 +123,14 @@ export default function ClickSignSection({
       setTemplates(tplRes.data ?? []);
       setBaseUrlDraft(infoRes.data.base_url || '');
       setProvider(provRes.data.provider || 'clicksign');
+      // Sincroniza o dropdown de ambiente com o que já está salvo.
+      const savedBase = dsRes.data.oauth_base_url;
+      if (
+        savedBase === 'https://account.docusign.com' ||
+        savedBase === 'https://account-d.docusign.com'
+      ) {
+        setDsOauthBase(savedBase);
+      }
     } catch (e: any) {
       toast.error(
         e?.response?.data?.message ||
@@ -135,6 +157,35 @@ export default function ClickSignSection({
       );
     } finally {
       setSavingProvider(false);
+    }
+  };
+
+  const saveDsCredentials = async () => {
+    if (!dsIntegrationKey.trim() || !dsSecretKey.trim()) {
+      toast.warning('Integration Key e Secret são obrigatórios.');
+      return;
+    }
+    setSavingDsCreds(true);
+    try {
+      await api.patch(
+        `/enterprise/${enterpriseId}/docusign/credentials`,
+        {
+          integration_key: dsIntegrationKey.trim(),
+          secret_key: dsSecretKey.trim(),
+          oauth_base_url: dsOauthBase,
+        },
+      );
+      toast.success('Credenciais salvas. Agora clique em Conectar DocuSign.');
+      setEditingDsCreds(false);
+      setDsIntegrationKey('');
+      setDsSecretKey('');
+      await load();
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao salvar credenciais.',
+      );
+    } finally {
+      setSavingDsCreds(false);
     }
   };
 
@@ -428,64 +479,186 @@ export default function ClickSignSection({
           <>
           <Box>
             <Typography fontSize={12} fontWeight={600} mb={0.5}>
-              Conexão com DocuSign
+              Integration Key (App do DocuSign da sua empresa)
             </Typography>
-            {dsInfo?.connected ? (
-              <Stack gap={1}>
-                <Typography fontSize={13} color="success.main">
-                  ● Conectado — o token é renovado automaticamente pelo
-                  Cobreai.
+            {dsInfo?.has_credentials && !editingDsCreds ? (
+              <Stack gap={0.5}>
+                <Typography fontSize={13} color={C.textMuted}>
+                  Cadastrada:{' '}
+                  <b style={{ fontFamily: 'monospace' }}>
+                    {dsInfo.integration_key_masked}
+                  </b>
                 </Typography>
                 <Typography fontSize={12} color={C.textMuted}>
-                  Conta:{' '}
+                  Ambiente:{' '}
                   <b style={{ fontFamily: 'monospace' }}>
-                    {dsInfo.account_id ?? '?'}
-                  </b>
-                  {' · '}Ambiente:{' '}
-                  <b style={{ fontFamily: 'monospace' }}>
-                    {dsInfo.base_url ?? '?'}
+                    {dsInfo.oauth_base_url}
                   </b>
                 </Typography>
                 {canEdit && (
-                  <Stack direction="row" gap={1} mt={1}>
+                  <Box mt={0.5}>
                     <Button
                       size="small"
-                      onClick={connectDocuSign}
-                      disabled={connectingDs || disconnectingDs}
+                      onClick={() => {
+                        setEditingDsCreds(true);
+                        setDsIntegrationKey('');
+                        setDsSecretKey('');
+                      }}
                     >
-                      {connectingDs ? 'Reconectando…' : 'Reconectar'}
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={disconnectDocuSign}
-                      disabled={connectingDs || disconnectingDs}
-                    >
-                      {disconnectingDs ? 'Desconectando…' : 'Desconectar'}
-                    </Button>
-                  </Stack>
-                )}
-              </Stack>
-            ) : (
-              <Stack gap={1}>
-                <Typography fontSize={13} color={C.textMuted}>
-                  Nenhuma conta DocuSign conectada nesta empresa. Novos
-                  contratos ficam bloqueados até você conectar.
-                </Typography>
-                {canEdit && (
-                  <Box>
-                    <Button
-                      variant="contained"
-                      onClick={connectDocuSign}
-                      disabled={connectingDs}
-                    >
-                      {connectingDs ? 'Redirecionando…' : 'Conectar DocuSign'}
+                      Alterar credenciais
                     </Button>
                   </Box>
                 )}
               </Stack>
+            ) : (
+              <Stack gap={1}>
+                {!dsInfo?.has_credentials && (
+                  <Typography fontSize={12} color={C.textMuted}>
+                    Cada empresa usa sua própria conta DocuSign. Crie uma
+                    Integration Key no console e cole aqui — o Redirect
+                    URI a cadastrar lá é{' '}
+                    <b style={{ fontFamily: 'monospace' }}>
+                      {(import.meta.env.VITE_API_URL || '') +
+                        '/docusign/oauth/callback'}
+                    </b>
+                    .
+                  </Typography>
+                )}
+                <TextField
+                  size="small"
+                  fullWidth
+                  label="Integration Key"
+                  placeholder="uuid da Integration Key"
+                  value={dsIntegrationKey}
+                  onChange={e => setDsIntegrationKey(e.target.value)}
+                  disabled={!canEdit || savingDsCreds}
+                />
+                <TextField
+                  size="small"
+                  fullWidth
+                  type="password"
+                  label="Secret Key"
+                  placeholder="colar o Secret gerado no console"
+                  value={dsSecretKey}
+                  onChange={e => setDsSecretKey(e.target.value)}
+                  disabled={!canEdit || savingDsCreds}
+                />
+                <TextField
+                  select
+                  size="small"
+                  fullWidth
+                  label="Ambiente"
+                  value={dsOauthBase}
+                  onChange={e =>
+                    setDsOauthBase(
+                      e.target.value as
+                        | 'https://account-d.docusign.com'
+                        | 'https://account.docusign.com',
+                    )
+                  }
+                  disabled={!canEdit || savingDsCreds}
+                  helperText="Demo enquanto a Integration Key não passou pelo Go-Live."
+                >
+                  <MenuItem value="https://account-d.docusign.com">
+                    Demo / Dev (account-d.docusign.com)
+                  </MenuItem>
+                  <MenuItem value="https://account.docusign.com">
+                    Produção (account.docusign.com)
+                  </MenuItem>
+                </TextField>
+                {canEdit && (
+                  <Stack direction="row" gap={1}>
+                    <Button
+                      variant="contained"
+                      onClick={saveDsCredentials}
+                      disabled={savingDsCreds}
+                    >
+                      {savingDsCreds ? 'Salvando…' : 'Salvar credenciais'}
+                    </Button>
+                    {editingDsCreds && (
+                      <Button
+                        onClick={() => {
+                          setEditingDsCreds(false);
+                          setDsIntegrationKey('');
+                          setDsSecretKey('');
+                        }}
+                        disabled={savingDsCreds}
+                      >
+                        Cancelar
+                      </Button>
+                    )}
+                  </Stack>
+                )}
+              </Stack>
             )}
           </Box>
+
+          {/* Conexão OAuth — só quando credenciais estão salvas. */}
+          {dsInfo?.has_credentials && (
+            <Box>
+              <Typography fontSize={12} fontWeight={600} mb={0.5}>
+                Conexão OAuth
+              </Typography>
+              {dsInfo.connected ? (
+                <Stack gap={1}>
+                  <Typography fontSize={13} color="success.main">
+                    ● Conectado — o token é renovado automaticamente.
+                  </Typography>
+                  <Typography fontSize={12} color={C.textMuted}>
+                    Conta:{' '}
+                    <b style={{ fontFamily: 'monospace' }}>
+                      {dsInfo.account_id ?? '?'}
+                    </b>
+                    {' · '}Datacenter:{' '}
+                    <b style={{ fontFamily: 'monospace' }}>
+                      {dsInfo.base_url ?? '?'}
+                    </b>
+                  </Typography>
+                  {canEdit && (
+                    <Stack direction="row" gap={1} mt={0.5}>
+                      <Button
+                        size="small"
+                        onClick={connectDocuSign}
+                        disabled={connectingDs || disconnectingDs}
+                      >
+                        {connectingDs ? 'Reconectando…' : 'Reconectar'}
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={disconnectDocuSign}
+                        disabled={connectingDs || disconnectingDs}
+                      >
+                        {disconnectingDs
+                          ? 'Desconectando…'
+                          : 'Desconectar'}
+                      </Button>
+                    </Stack>
+                  )}
+                </Stack>
+              ) : (
+                <Stack gap={1}>
+                  <Typography fontSize={13} color={C.textMuted}>
+                    Credenciais cadastradas mas ainda sem sessão. Clique
+                    pra autorizar sua conta DocuSign.
+                  </Typography>
+                  {canEdit && (
+                    <Box>
+                      <Button
+                        variant="contained"
+                        onClick={connectDocuSign}
+                        disabled={connectingDs}
+                      >
+                        {connectingDs
+                          ? 'Redirecionando…'
+                          : 'Conectar DocuSign'}
+                      </Button>
+                    </Box>
+                  )}
+                </Stack>
+              )}
+            </Box>
+          )}
           </>
           )}
 
