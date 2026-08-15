@@ -19,6 +19,8 @@ import Documents from './pages/Documents';
 import Registrations from './pages/Registrations';
 import Benefits from './pages/Benefits';
 import Communications from './pages/Communications';
+import PayoutMonitoring from './pages/PayoutMonitoring';
+import NfUpload from './pages/NfUpload';
 import PublicRegistration from './pages/PublicRegistration';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -123,6 +125,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      <Route
+        path="/monitoramento"
+        element={
+          <PrivateRoute>
+            <PayoutMonitoring />
+          </PrivateRoute>
+        }
+      />
+      {/* PÚBLICA — contador acessa pelo link do e-mail. Sem auth. */}
+      <Route path="/nf-upload/:token" element={<NfUpload />} />
 
       {/* Rota PÚBLICA — sem auth. Cadastro do médico na empresa. */}
       <Route

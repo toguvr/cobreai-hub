@@ -22,6 +22,7 @@ import { useEnterprise } from '../../contexts/EnterpriseContext';
 import api from '../../services/api';
 import ClickSignSection from './ClickSignSection';
 import WhatsappConfigSection from './WhatsappConfigSection';
+import BillingSettingsSection from './BillingSettingsSection';
 
 interface ExpertiseRow {
   id: string;
@@ -208,6 +209,13 @@ export default function Settings() {
 
         {enterpriseId && isOrgAdmin && (
           <WhatsappConfigSection
+            enterpriseId={enterpriseId}
+            canEdit={isOrgAdmin}
+          />
+        )}
+
+        {enterpriseId && isOrgAdmin && (
+          <BillingSettingsSection
             enterpriseId={enterpriseId}
             canEdit={isOrgAdmin}
           />

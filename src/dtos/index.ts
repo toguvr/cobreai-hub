@@ -302,6 +302,101 @@ export interface SegmentOptions {
   expertises: Array<{ id: string; name: string }>;
 }
 
+// ── Fechamento → NF-e → Pagamento ──────────────────────────────
+
+export type MonthlyPayoutStatus =
+  | 'published'
+  | 'nf_requested'
+  | 'nf_received'
+  | 'nf_rejected'
+  | 'nf_approved'
+  | 'paid';
+
+export interface PayoutListItem {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_email: string | null;
+  user_crm: string | null;
+  month: string;
+  bruto: number;
+  liquido: number;
+  appointments_count: number;
+  status: MonthlyPayoutStatus;
+  hospitals_count: number;
+  published_at: string | null;
+  nf_requested_at: string | null;
+  nf_received_at: string | null;
+  nf_approved_at: string | null;
+  paid_at: string | null;
+  updated_at: string;
+}
+
+export interface PayoutListResponse {
+  items: PayoutListItem[];
+  totals_by_status: Record<MonthlyPayoutStatus, number>;
+}
+
+export interface PayoutHospitalBreakdown {
+  id: string;
+  hospital_id: string;
+  hospital_name_snapshot: string | null;
+  appointments: number;
+  bruto: string; // numeric vem como string do TypeORM
+  liquido: string;
+}
+
+export interface PayoutEvent {
+  id: string;
+  payout_id: string;
+  action: string;
+  actor_user_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface PayoutDetail {
+  payout: {
+    id: string;
+    enterprise_id: string;
+    user_id: string;
+    month: string;
+    bruto: string;
+    liquido: string;
+    appointments_count: number;
+    status: MonthlyPayoutStatus;
+    published_at: string | null;
+    nf_requested_at: string | null;
+    nf_upload_token: string | null;
+    nf_received_at: string | null;
+    nf_file_url: string | null;
+    nf_file_xml_url: string | null;
+    nf_approved_at: string | null;
+    nf_rejected_at: string | null;
+    nf_rejection_reason: string | null;
+    paid_at: string | null;
+    created_at: string;
+    updated_at: string;
+    hospitals: PayoutHospitalBreakdown[];
+    events: PayoutEvent[];
+  };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    crm: string | null;
+    crm_uf: string | null;
+  } | null;
+  bankAccount: {
+    id: string;
+    is_pj: boolean;
+    cnpj: string | null;
+    company_name: string | null;
+    accounting_phone: string | null;
+    nf_emails?: Array<{ id: string; email: string }>;
+  } | null;
+}
+
 export interface SegmentPreview {
   total: number;
   sample: Array<{
