@@ -226,13 +226,18 @@ export default function PayoutMonitoring() {
       const sent = res.data.results.filter(r => r.status === 'sent').length;
       const noRec = res.data.results.filter(r => r.status === 'no_recipient').length;
       const invalid = res.data.results.filter(r => r.status === 'invalid_status').length;
-      const errored = res.data.results.filter(r => r.status === 'error').length;
+      const errored = res.data.results.filter(r => r.status === 'error');
       let msg = `NF-e solicitada pra ${sent} médico(s).`;
       if (noRec > 0) msg += ` ${noRec} sem e-mail cadastrado.`;
       if (invalid > 0) msg += ` ${invalid} não estavam no status correto.`;
-      if (errored > 0) msg += ` ${errored} falhou.`;
+      if (errored.length > 0) msg += ` ${errored.length} falhou.`;
       if (sent > 0) toast.success(msg);
       else toast.warning(msg);
+      // Se algum falhou, mostra o motivo do primeiro num toast à parte
+      // (útil pra descobrir "Email not verified" do SES sandbox etc.)
+      if (errored.length > 0 && errored[0].error) {
+        toast.error(`Motivo: ${errored[0].error}`, { autoClose: 10000 });
+      }
       setSelectedIds(new Set());
       load();
     } catch (err: any) {
