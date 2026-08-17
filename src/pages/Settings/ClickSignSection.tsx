@@ -671,7 +671,8 @@ export default function ClickSignSection({
               mb={1}
             >
               <Typography fontSize={12} fontWeight={600}>
-                Modelos de contrato
+                Modelos de contrato{' '}
+                {provider === 'docusign' ? '(DocuSign)' : '(ClickSign)'}
               </Typography>
               {canEdit && (
                 <Button
@@ -683,6 +684,19 @@ export default function ClickSignSection({
                 </Button>
               )}
             </Stack>
+
+            {templates.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 1.5 }}>
+                O ID abaixo é usado pelo provider ativo{' '}
+                <strong>
+                  ({provider === 'docusign' ? 'DocuSign' : 'ClickSign'})
+                </strong>
+                . Se você trocou de provider recentemente, revise cada modelo
+                e cole o ID do template no provider correto — caso contrário
+                o envio do contrato vai falhar com{' '}
+                <code>TEMPLATE_ID_INVALID</code>.
+              </Alert>
+            )}
 
             {templates.length === 0 ? (
               <Alert severity="info">
@@ -702,6 +716,15 @@ export default function ClickSignSection({
                         {t.name}
                       </Typography>
                       <Typography
+                        fontSize={10}
+                        color={C.textMuted}
+                        sx={{ letterSpacing: 0.05 }}
+                      >
+                        {provider === 'docusign'
+                          ? 'TEMPLATE ID DOCUSIGN'
+                          : 'CHAVE MODELO CLICKSIGN'}
+                      </Typography>
+                      <Typography
                         fontSize={11}
                         color={C.textMuted}
                         fontFamily="monospace"
@@ -709,6 +732,11 @@ export default function ClickSignSection({
                       >
                         {t.clicksign_template_key}
                       </Typography>
+                      {provider === 'docusign' && t.docusign_role_name && (
+                        <Typography fontSize={11} color={C.textMuted}>
+                          Role: <code>{t.docusign_role_name}</code>
+                        </Typography>
+                      )}
                       {t.description && (
                         <Typography fontSize={11} color={C.textMuted} noWrap>
                           {t.description}
