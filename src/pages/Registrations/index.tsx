@@ -245,6 +245,10 @@ export default function Registrations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
+  // Recarrega templates sempre que o admin abre o detalhe de um
+  // credenciamento. Evita o caso do admin cadastrar template novo em
+  // /configuracoes numa aba e voltar aqui sem refresh — ele veria a
+  // lista antiga e reenviaria o template errado.
   useEffect(() => {
     if (!current?.id) return;
     (async () => {
@@ -253,19 +257,20 @@ export default function Registrations() {
           `/enterprise/${current.id}/contract-templates`,
         );
         setTemplates(res.data ?? []);
-        // Se só tem 1, seleciona automaticamente pra economizar clique.
-        if ((res.data ?? []).length === 1) {
-          setSelectedTemplateId(res.data![0].id);
-        } else {
-          setSelectedTemplateId('');
-        }
+        // Só auto-seleciona se ainda não tem seleção. Mantém o que o
+        // admin já escolheu manualmente.
+        setSelectedTemplateId(prev => {
+          if (prev && (res.data ?? []).some(t => t.id === prev)) return prev;
+          if ((res.data ?? []).length === 1) return res.data![0].id;
+          return '';
+        });
       } catch {
         // silencioso: se falhar, o botão de gerar contrato mostra
         // "configure em /configurações" quando o admin abrir o modal.
         setTemplates([]);
       }
     })();
-  }, [current?.id]);
+  }, [current?.id, selected?.id]);
 
   const openDetails = async (item: Registration) => {
     setSelected(item);
@@ -782,16 +787,53 @@ export default function Registrations() {
               label="Modelo"
               value={selectedTemplateId}
               onChange={e => setSelectedTemplateId(e.target.value)}
-              sx={{ minWidth: 180 }}
+              sx={{ minWidth: 280 }}
               disabled={acting}
+              // Mostra key + name no botão fechado pra o admin ver
+              // exatamente qual template ID vai ser enviado, evitando
+              // reenviar o template ClickSign antigo quando a empresa
+              // já trocou pra DocuSign.
+              SelectProps={{
+                renderValue: (v: unknown) => {
+                  const t = templates.find(x => x.id === v);
+                  if (!t) return '';
+                  return `${t.name} — ${t.clicksign_template_key.slice(0, 8)}…`;
+                },
+              }}
             >
               {templates.map(t => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.name}
+                  <Box>
+                    <Typography fontSize={13} fontWeight={600}>
+                      {t.name}
+                    </Typography>
+                    <Typography
+                      fontSize={10}
+                      color="text.secondary"
+                      fontFamily="monospace"
+                    >
+                      {t.clicksign_template_key}
+                    </Typography>
+                  </Box>
                 </MenuItem>
               ))}
             </TextField>
           )}
+          {/* Mesmo quando só tem 1 template auto-selecionado, mostra
+              o ID pra o admin conferir antes de reenviar. */}
+          {selected?.status === 'approved' &&
+            templates.length === 1 &&
+            selectedTemplateId && (
+              <Typography
+                fontSize={11}
+                color="text.secondary"
+                fontFamily="monospace"
+                sx={{ mr: 1 }}
+              >
+                {templates[0].name}:{' '}
+                {templates[0].clicksign_template_key.slice(0, 8)}…
+              </Typography>
+            )}
           {selected?.status === 'approved' && templates.length >= 1 && (
             <Button
               variant="contained"
