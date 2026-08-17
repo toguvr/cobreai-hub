@@ -22,6 +22,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -38,6 +40,8 @@ const navItems = [
   { label: 'Benefícios', icon: <CardGiftcardIcon />, path: '/beneficios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
+  { label: 'Monitoramento', icon: <MonitorHeartIcon />, path: '/monitoramento' },
+  { label: 'Comunicações', icon: <CampaignIcon />, path: '/comunicacoes' },
   { label: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes' },
 ];
 

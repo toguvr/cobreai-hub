@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -9,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Link,
   MenuItem,
   Paper,
   Stack,
@@ -104,6 +106,21 @@ export default function ClickSignSection({
   const [dlgKey, setDlgKey] = useState('');
   const [dlgDesc, setDlgDesc] = useState('');
   const [dlgRole, setDlgRole] = useState('');
+  // Templates DocuSign carregados via /docusign/templates (só quando
+  // o dialog abre pra DocuSign). Se falhar, o campo vira texto livre
+  // com aviso — não bloqueia o admin de salvar manualmente.
+  const [dsTemplates, setDsTemplates] = useState<
+    Array<{
+      templateId: string;
+      name: string;
+      shared: boolean;
+      roles: string[];
+    }>
+  >([]);
+  const [dsTemplatesLoading, setDsTemplatesLoading] = useState(false);
+  const [dsTemplatesError, setDsTemplatesError] = useState<string | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -275,6 +292,31 @@ export default function ClickSignSection({
     }
   };
 
+  const loadDsTemplates = useCallback(async () => {
+    if (provider !== 'docusign') return;
+    setDsTemplatesLoading(true);
+    setDsTemplatesError(null);
+    try {
+      const res = await api.get<{
+        templates: Array<{
+          templateId: string;
+          name: string;
+          shared: boolean;
+          roles: string[];
+        }>;
+      }>(`/enterprise/${enterpriseId}/docusign/templates`);
+      setDsTemplates(res.data.templates);
+    } catch (e: any) {
+      setDsTemplates([]);
+      setDsTemplatesError(
+        e?.response?.data?.message ||
+          'Falha ao listar templates DocuSign. Confira se a conta está conectada.',
+      );
+    } finally {
+      setDsTemplatesLoading(false);
+    }
+  }, [provider, enterpriseId]);
+
   const openCreate = () => {
     setDlgTarget(null);
     setDlgName('');
@@ -282,6 +324,7 @@ export default function ClickSignSection({
     setDlgDesc('');
     setDlgRole('');
     setDlgOpen(true);
+    loadDsTemplates();
   };
 
   const openEdit = (t: Template) => {
@@ -291,6 +334,7 @@ export default function ClickSignSection({
     setDlgDesc(t.description || '');
     setDlgRole(t.docusign_role_name || '');
     setDlgOpen(true);
+    loadDsTemplates();
   };
 
   const saveDialog = async () => {
@@ -671,7 +715,8 @@ export default function ClickSignSection({
               mb={1}
             >
               <Typography fontSize={12} fontWeight={600}>
-                Modelos de contrato
+                Modelos de contrato{' '}
+                {provider === 'docusign' ? '(DocuSign)' : '(ClickSign)'}
               </Typography>
               {canEdit && (
                 <Button
@@ -683,6 +728,19 @@ export default function ClickSignSection({
                 </Button>
               )}
             </Stack>
+
+            {templates.length > 0 && (
+              <Alert severity="warning" sx={{ mb: 1.5 }}>
+                O ID abaixo é usado pelo provider ativo{' '}
+                <strong>
+                  ({provider === 'docusign' ? 'DocuSign' : 'ClickSign'})
+                </strong>
+                . Se você trocou de provider recentemente, revise cada modelo
+                e cole o ID do template no provider correto — caso contrário
+                o envio do contrato vai falhar com{' '}
+                <code>TEMPLATE_ID_INVALID</code>.
+              </Alert>
+            )}
 
             {templates.length === 0 ? (
               <Alert severity="info">
@@ -702,6 +760,15 @@ export default function ClickSignSection({
                         {t.name}
                       </Typography>
                       <Typography
+                        fontSize={10}
+                        color={C.textMuted}
+                        sx={{ letterSpacing: 0.05 }}
+                      >
+                        {provider === 'docusign'
+                          ? 'TEMPLATE ID DOCUSIGN'
+                          : 'CHAVE MODELO CLICKSIGN'}
+                      </Typography>
+                      <Typography
                         fontSize={11}
                         color={C.textMuted}
                         fontFamily="monospace"
@@ -709,6 +776,11 @@ export default function ClickSignSection({
                       >
                         {t.clicksign_template_key}
                       </Typography>
+                      {provider === 'docusign' && t.docusign_role_name && (
+                        <Typography fontSize={11} color={C.textMuted}>
+                          Role: <code>{t.docusign_role_name}</code>
+                        </Typography>
+                      )}
                       {t.description && (
                         <Typography fontSize={11} color={C.textMuted} noWrap>
                           {t.description}
@@ -762,36 +834,165 @@ export default function ClickSignSection({
               onChange={e => setDlgName(e.target.value)}
               autoFocus
             />
-            <TextField
-              size="small"
-              fullWidth
-              label={
-                provider === 'docusign'
-                  ? 'Template ID no DocuSign'
-                  : 'Chave do modelo no ClickSign'
-              }
-              placeholder={
-                provider === 'docusign'
-                  ? 'templateId do DocuSign'
-                  : 'uuid do template no ClickSign'
-              }
-              value={dlgKey}
-              onChange={e => setDlgKey(e.target.value.trim())}
-              helperText={
-                provider === 'docusign'
-                  ? 'Pega no dashboard do DocuSign em Templates.'
-                  : 'Pega no dashboard do ClickSign em Modelos.'
-              }
-            />
-            {provider === 'docusign' && (
+            {provider === 'docusign' ? (
+              <>
+                {dsTemplatesError && (
+                  <Alert
+                    severity="warning"
+                    action={
+                      <Button size="small" onClick={loadDsTemplates}>
+                        Tentar de novo
+                      </Button>
+                    }
+                  >
+                    {dsTemplatesError} Você ainda pode digitar o Template ID
+                    manualmente abaixo.
+                  </Alert>
+                )}
+                <Autocomplete
+                  size="small"
+                  fullWidth
+                  freeSolo
+                  loading={dsTemplatesLoading}
+                  options={dsTemplates}
+                  value={
+                    dsTemplates.find(t => t.templateId === dlgKey) ?? dlgKey
+                  }
+                  onChange={(_, v) => {
+                    if (typeof v === 'string') {
+                      setDlgKey(v.trim());
+                    } else if (v) {
+                      setDlgKey(v.templateId);
+                      // se dlgRole ainda vazio e o template tem só 1 role,
+                      // auto-preenche pra o admin não errar.
+                      if (!dlgRole && v.roles.length === 1) {
+                        setDlgRole(v.roles[0]);
+                      }
+                    } else {
+                      setDlgKey('');
+                    }
+                  }}
+                  onInputChange={(_, v, reason) => {
+                    // Digitação manual (freeSolo) — só considera se o
+                    // reason for 'input', não 'reset'.
+                    if (reason === 'input') setDlgKey(v.trim());
+                  }}
+                  getOptionLabel={o =>
+                    typeof o === 'string' ? o : `${o.name} — ${o.templateId}`
+                  }
+                  isOptionEqualToValue={(a, b) =>
+                    (typeof a === 'string' ? a : a.templateId) ===
+                    (typeof b === 'string' ? b : b.templateId)
+                  }
+                  renderOption={(props, option) => (
+                    <li {...props}>
+                      <Box>
+                        <Typography fontSize={13} fontWeight={600}>
+                          {option.name}
+                          {option.shared && (
+                            <Typography
+                              component="span"
+                              fontSize={10}
+                              color="text.secondary"
+                              sx={{ ml: 1 }}
+                            >
+                              (shared)
+                            </Typography>
+                          )}
+                        </Typography>
+                        <Typography
+                          fontSize={10}
+                          color="text.secondary"
+                          fontFamily="monospace"
+                        >
+                          {option.templateId}
+                        </Typography>
+                        {option.roles.length > 0 && (
+                          <Typography fontSize={10} color="text.secondary">
+                            roles: {option.roles.join(', ')}
+                          </Typography>
+                        )}
+                      </Box>
+                    </li>
+                  )}
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      label="Template DocuSign"
+                      placeholder="Escolha ou cole o Template ID"
+                      helperText={
+                        dsTemplates.length > 0
+                          ? `${dsTemplates.length} template(s) acessíveis pela sua conta DocuSign.`
+                          : dsTemplatesLoading
+                            ? 'Carregando…'
+                            : 'Se seu template não aparece aqui, ele não é acessível pela conta OAuth conectada.'
+                      }
+                      InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {dsTemplatesLoading && (
+                              <CircularProgress size={14} />
+                            )}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
+                />
+                <Autocomplete
+                  size="small"
+                  fullWidth
+                  freeSolo
+                  options={
+                    // Se dlgKey bater com um template listado, mostra
+                    // só os roles daquele template. Senão, agrega
+                    // todos os roles vistos.
+                    (
+                      dsTemplates.find(t => t.templateId === dlgKey)
+                        ?.roles ??
+                      Array.from(
+                        new Set(dsTemplates.flatMap(t => t.roles)),
+                      )
+                    ) as string[]
+                  }
+                  value={dlgRole}
+                  onChange={(_, v) => setDlgRole(v ?? '')}
+                  onInputChange={(_, v, reason) => {
+                    if (reason === 'input') setDlgRole(v);
+                  }}
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      label="Role Name (DocuSign)"
+                      placeholder="Ex.: Signer1, Credenciado"
+                      helperText="Case-sensitive. Precisa bater EXATO com o Role do template."
+                    />
+                  )}
+                />
+              </>
+            ) : (
               <TextField
                 size="small"
                 fullWidth
-                label="Role Name (DocuSign)"
-                placeholder="Signer1"
-                value={dlgRole}
-                onChange={e => setDlgRole(e.target.value)}
-                helperText="Deixe em branco pra usar 'Signer1' (padrão)."
+                label="Chave do modelo no ClickSign"
+                placeholder="uuid do template no ClickSign"
+                value={dlgKey}
+                onChange={e => setDlgKey(e.target.value.trim())}
+                helperText={
+                  <>
+                    Pega no dashboard do ClickSign em{' '}
+                    <Link
+                      href="https://app.clicksign.com/templates"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Modelos
+                    </Link>
+                    .
+                  </>
+                }
               />
             )}
             <TextField
