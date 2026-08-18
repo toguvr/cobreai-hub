@@ -24,6 +24,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import SendIcon from '@mui/icons-material/Send';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import { toast } from 'react-toastify';
@@ -131,6 +132,7 @@ export default function PayoutMonitoring() {
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [requesting, setRequesting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [hospitals, setHospitals] = useState<
     Array<{ id: string; name: string }>
@@ -207,6 +209,53 @@ export default function PayoutMonitoring() {
       else next.add(id);
       return next;
     });
+  };
+
+  // Só payouts em 'published' são deletáveis. Se o admin selecionou
+  // uma mistura (published + nf_rejected), o botão de deletar mostra
+  // só a contagem dos deletáveis e ignora o resto.
+  const deletableSelectedCount = useMemo(() => {
+    if (!data?.items) return 0;
+    const byId = new Map(data.items.map(i => [i.id, i]));
+    let n = 0;
+    selectedIds.forEach(id => {
+      if (byId.get(id)?.status === 'published') n += 1;
+    });
+    return n;
+  }, [selectedIds, data?.items]);
+
+  const bulkDelete = async () => {
+    if (!current?.id || deletableSelectedCount === 0) return;
+    if (
+      !window.confirm(
+        `Deletar ${deletableSelectedCount} fechamento(s) publicado(s)? Ação irreversível. Fechamentos já com NF-e solicitada ficam intactos.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await api.post<{
+        deleted: number;
+        skipped_in_flight: number;
+        not_found: number;
+      }>(`/enterprise/${current.id}/payouts/bulk-delete`, {
+        payout_ids: Array.from(selectedIds),
+      });
+      let msg = `${res.data.deleted} deletado(s).`;
+      if (res.data.skipped_in_flight > 0) {
+        msg += ` ${res.data.skipped_in_flight} preservado(s) (já em fluxo de NF-e).`;
+      }
+      toast.success(msg);
+      setSelectedIds(new Set());
+      load();
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message || 'Falha ao deletar.',
+      );
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const requestNF = async () => {
@@ -372,23 +421,52 @@ export default function PayoutMonitoring() {
             severity="info"
             sx={{ mb: 2, alignItems: 'center' }}
             action={
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={
-                  requesting ? <CircularProgress size={14} /> : <SendIcon />
-                }
-                onClick={requestNF}
-                disabled={requesting}
-                sx={{ textTransform: 'none' }}
-              >
-                Solicitar NF-e ({selectedIds.size})
-              </Button>
+              <Stack direction="row" gap={1}>
+                {deletableSelectedCount > 0 && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    startIcon={
+                      deleting ? (
+                        <CircularProgress size={14} />
+                      ) : (
+                        <DeleteOutlineIcon />
+                      )
+                    }
+                    onClick={bulkDelete}
+                    disabled={deleting || requesting}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Deletar ({deletableSelectedCount})
+                  </Button>
+                )}
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={
+                    requesting ? (
+                      <CircularProgress size={14} />
+                    ) : (
+                      <SendIcon />
+                    )
+                  }
+                  onClick={requestNF}
+                  disabled={requesting || deleting}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Solicitar NF-e ({selectedIds.size})
+                </Button>
+              </Stack>
             }
           >
-            {selectedIds.size} fechamento(s) selecionado(s). Ao clicar em
-            solicitar, um e-mail será disparado pra cada médico com os dados
-            pra emissão da NF-e.
+            {selectedIds.size} fechamento(s) selecionado(s).{' '}
+            {deletableSelectedCount > 0 && (
+              <>
+                <strong>{deletableSelectedCount}</strong> em “Fechamento
+                publicado” podem ser deletados.
+              </>
+            )}
           </Alert>
         )}
 

@@ -324,20 +324,42 @@ function CampaignWizard({ enterpriseId, onClose, onCreated }: WizardProps) {
     [hospitals, cities, expertises, onlyCredentialed, inactiveDays],
   );
 
+  // Recarrega opções quando o admin muda a seleção de hospitais.
+  // Assim cidades e especialidades encolhem pra só as que existem
+  // nos médicos daqueles hospitais.
   useEffect(() => {
     let alive = true;
     setLoadingOpts(true);
+    const params: Record<string, string> = {};
+    if (hospitals.length > 0) {
+      params.hospital_ids = hospitals.map(h => h.id).join(',');
+    }
     api
-      .get<SegmentOptions>(`/enterprise/${enterpriseId}/email-campaigns/options`)
+      .get<SegmentOptions>(
+        `/enterprise/${enterpriseId}/email-campaigns/options`,
+        { params },
+      )
       .then(res => {
-        if (alive) setOptions(res.data);
+        if (!alive) return;
+        setOptions(res.data);
+        // Se hospitais estreitaram e alguma cidade/especialidade
+        // selecionada não faz mais parte do novo universo, remove
+        // silenciosamente pra não ficar filtro fantasma.
+        setCities(prev =>
+          prev.filter(c => res.data.cities.includes(c)),
+        );
+        setExpertises(prev =>
+          prev.filter(e =>
+            res.data.expertises.some(o => o.id === e.id),
+          ),
+        );
       })
       .catch(() => toast.error('Falha ao carregar opções de segmentação.'))
       .finally(() => alive && setLoadingOpts(false));
     return () => {
       alive = false;
     };
-  }, [enterpriseId]);
+  }, [enterpriseId, hospitals]);
 
   // Preview reativo — debounce simples 400ms
   useEffect(() => {
