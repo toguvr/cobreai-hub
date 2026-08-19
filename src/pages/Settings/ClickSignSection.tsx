@@ -97,6 +97,7 @@ export default function ClickSignSection({
   >('https://account-d.docusign.com');
   const [editingDsCreds, setEditingDsCreds] = useState(false);
   const [savingDsCreds, setSavingDsCreds] = useState(false);
+  const [switchingEnv, setSwitchingEnv] = useState(false);
 
   // Template dialog (create/edit)
   const [dlgOpen, setDlgOpen] = useState(false);
@@ -174,6 +175,39 @@ export default function ClickSignSection({
       );
     } finally {
       setSavingProvider(false);
+    }
+  };
+
+  const switchEnvironment = async () => {
+    if (!dsInfo) return;
+    const target =
+      dsInfo.oauth_base_url === 'https://account-d.docusign.com'
+        ? 'https://account.docusign.com'
+        : 'https://account-d.docusign.com';
+    const targetLabel =
+      target === 'https://account.docusign.com' ? 'Produção' : 'Demo';
+    if (
+      !window.confirm(
+        `Trocar pra ${targetLabel} (${target})? A sessão atual do DocuSign vai ser encerrada e você precisa reconectar depois.`,
+      )
+    ) {
+      return;
+    }
+    setSwitchingEnv(true);
+    try {
+      await api.patch(`/enterprise/${enterpriseId}/docusign/environment`, {
+        oauth_base_url: target,
+      });
+      toast.success(
+        `Ambiente trocado pra ${targetLabel}. Clique em Conectar DocuSign pra autorizar a nova conta.`,
+      );
+      await load();
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || 'Erro ao trocar ambiente.',
+      );
+    } finally {
+      setSwitchingEnv(false);
     }
   };
 
@@ -533,14 +567,32 @@ export default function ClickSignSection({
                     {dsInfo.integration_key_masked}
                   </b>
                 </Typography>
-                <Typography fontSize={12} color={C.textMuted}>
-                  Ambiente:{' '}
-                  <b style={{ fontFamily: 'monospace' }}>
-                    {dsInfo.oauth_base_url}
-                  </b>
-                </Typography>
+                <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                  <Typography fontSize={12} color={C.textMuted}>
+                    Ambiente:{' '}
+                    <b style={{ fontFamily: 'monospace' }}>
+                      {dsInfo.oauth_base_url}
+                    </b>
+                  </Typography>
+                  {dsInfo.oauth_base_url ===
+                    'https://account-d.docusign.com' && (
+                    <Typography
+                      fontSize={11}
+                      sx={{
+                        color: '#b45309',
+                        bgcolor: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        borderRadius: 1,
+                        px: 0.75,
+                        py: 0.25,
+                      }}
+                    >
+                      DEMO / SANDBOX
+                    </Typography>
+                  )}
+                </Stack>
                 {canEdit && (
-                  <Box mt={0.5}>
+                  <Stack direction="row" gap={1} mt={0.5} flexWrap="wrap">
                     <Button
                       size="small"
                       onClick={() => {
@@ -551,7 +603,19 @@ export default function ClickSignSection({
                     >
                       Alterar credenciais
                     </Button>
-                  </Box>
+                    <Button
+                      size="small"
+                      onClick={switchEnvironment}
+                      disabled={switchingEnv}
+                    >
+                      {switchingEnv
+                        ? 'Trocando…'
+                        : dsInfo.oauth_base_url ===
+                            'https://account-d.docusign.com'
+                          ? 'Trocar pra Produção'
+                          : 'Trocar pra Demo'}
+                    </Button>
+                  </Stack>
                 )}
               </Stack>
             ) : (
