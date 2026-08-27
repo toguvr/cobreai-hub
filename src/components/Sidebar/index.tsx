@@ -61,8 +61,8 @@ const navItems = [
   { label: 'Benefícios', icon: <CardGiftcardIcon />, path: '/beneficios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
-  { label: 'Monitoramento', icon: <MonitorHeartIcon />, path: '/monitoramento' },
-  { label: 'Comunicações', icon: <CampaignIcon />, path: '/comunicacoes' },
+  // { label: 'Monitoramento', icon: <MonitorHeartIcon />, path: '/monitoramento' },
+  // { label: 'Comunicações', icon: <CampaignIcon />, path: '/comunicacoes' },
   { label: 'Configurações', icon: <SettingsIcon />, path: '/configuracoes' },
 ];
 
