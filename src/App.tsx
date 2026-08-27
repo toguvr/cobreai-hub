@@ -126,7 +126,7 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/comunicacoes"
         element={
           <PrivateRoute>
@@ -141,7 +141,7 @@ function AppRoutes() {
             <PayoutMonitoring />
           </PrivateRoute>
         }
-      />
+      /> */}
       {/* PÚBLICA — contador acessa pelo link do e-mail. Sem auth. */}
       <Route path="/nf-upload/:token" element={<NfUpload />} />
 
