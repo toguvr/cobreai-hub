@@ -59,15 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await api.post('/sessions', { email, password });
     const { token, user } = response.data;
 
-    // Verifica se o usuário tem ao menos uma organização vinculada antes
-    // de completar o login. Sem userEnterprise → sem acesso ao hub.
+    // O hub é só para membros da organização. Médico credenciado tem
+    // linha em userEnterprise, mas o endpoint só devolve onde ele é
+    // membro — então cai aqui e não entra.
     const enterprisesRes = await api.get('/userEnterprise/my-enterprises', {
       headers: { Authorization: `Bearer ${token}` },
     });
     const enterprises = Array.isArray(enterprisesRes.data) ? enterprisesRes.data : [];
     if (enterprises.length === 0) {
       throw new Error(
-        'Esta conta não tem acesso ao hub. Solicite ao administrador da organização que vincule você como membro.',
+        'Esta conta não tem acesso ao portal de gestão. Se você é médico credenciado, use o aplicativo Cobreai. Se você deveria gerenciar a organização, peça ao administrador para adicioná-lo em Membros.',
       );
     }
 

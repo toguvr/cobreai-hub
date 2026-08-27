@@ -8,10 +8,12 @@ import {
   Typography,
   Avatar,
   Divider,
-  Select,
-  MenuItem,
-  FormControl,
+  Autocomplete,
+  InputAdornment,
+  TextField,
+  createFilterOptions,
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import PeopleIcon from '@mui/icons-material/People';
@@ -20,6 +22,7 @@ import PriceChangeIcon from '@mui/icons-material/PriceChange';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import CampaignIcon from '@mui/icons-material/Campaign';
@@ -31,11 +34,29 @@ import { useBrand } from '../../hooks/useBrand';
 
 const DRAWER_WIDTH = 240;
 
+/** Ignora acento e caixa: "sao" acha "São". */
+const normalize = (value?: string) =>
+  (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+interface EnterpriseOption {
+  id: string;
+  title: string;
+}
+
+const filterEnterprises = createFilterOptions<EnterpriseOption>({
+  stringify: option => normalize(option.title),
+});
+
 const navItems = [
   { label: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { label: 'Hospitais', icon: <LocalHospitalIcon />, path: '/hospitais' },
   { label: 'Membros', icon: <PeopleIcon />, path: '/usuarios' },
   { label: 'Credenciamento', icon: <HowToRegIcon />, path: '/credenciamento' },
+  { label: 'Vínculos', icon: <AccountTreeIcon />, path: '/vinculos' },
   { label: 'Documentos', icon: <DescriptionIcon />, path: '/documentos' },
   { label: 'Benefícios', icon: <CardGiftcardIcon />, path: '/beneficios' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
@@ -60,6 +81,15 @@ export function Sidebar({
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { enterprises, current, setCurrent } = useEnterprise();
+  const enterpriseOptions: EnterpriseOption[] = enterprises.map(ue => ({
+    id: ue.enterprise.id,
+    title: ue.enterprise.title,
+  }));
+  // disableClearable exige valor sempre presente. O bloco só renderiza
+  // com 2+ organizações, então o fallback existe de fato.
+  const selectedEnterprise =
+    enterpriseOptions.find(option => option.id === current?.id) ??
+    enterpriseOptions[0];
   const brand = useBrand();
 
   // Cores derivadas para texto/decoração sobre o fundo escuro
@@ -135,31 +165,76 @@ export function Sidebar({
       {/* Seletor de organização */}
       {enterprises.length > 1 && (
         <Box sx={{ px: 2, pb: 1, mt: 0.5 }}>
-          <FormControl fullWidth size="small">
-            <Select
-              value={current?.id || ''}
-              onChange={e => {
-                const found = enterprises.find(
-                  ue => ue.enterprise.id === e.target.value,
-                );
-                if (found) setCurrent(found.enterprise);
-              }}
-              sx={{
-                color: onDarkPrimary,
-                '.MuiOutlinedInput-notchedOutline': { borderColor: onDarkBorder },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
-                '.MuiSvgIcon-root': { color: onDarkPrimary },
-                fontSize: 12,
+          <Autocomplete
+            options={enterpriseOptions}
+            value={selectedEnterprise}
+            size="small"
+            fullWidth
+            // Sempre precisa de uma organização ativa — sem limpar.
+            disableClearable
+            openOnFocus
+            // Clicar já seleciona o texto: digitar troca a busca direto.
+            selectOnFocus
+            handleHomeEndKeys
+            blurOnSelect
+            // Enter confirma o primeiro resultado, sem mouse.
+            autoHighlight
+            filterOptions={filterEnterprises}
+            getOptionLabel={option => option.title ?? ''}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            onChange={(_event, option) => {
+              const found = enterprises.find(
+                ue => ue.enterprise.id === option?.id,
+              );
+              if (found) setCurrent(found.enterprise);
+            }}
+            noOptionsText="Nenhuma organização"
+            renderInput={params => (
+              <TextField
+                {...params}
+                placeholder="Buscar organização"
+                inputProps={{
+                  ...params.inputProps,
+                  'aria-label': 'Organização',
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  // Sinaliza que dá pra digitar — sem a lupa o campo
+                  // parece um select comum e ninguém tenta buscar.
+                  startAdornment: (
+                    <InputAdornment position="start" sx={{ mr: 0 }}>
+                      <SearchIcon sx={{ fontSize: 15, color: onDarkFaint }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            )}
+            sx={{
+              '& .MuiOutlinedInput-root': {
                 bgcolor: 'rgba(255,255,255,0.05)',
-              }}
-            >
-              {enterprises.map(ue => (
-                <MenuItem key={ue.enterprise.id} value={ue.enterprise.id}>
-                  {ue.enterprise.title}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                fontSize: 12,
+                color: onDarkPrimary,
+              },
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: onDarkBorder,
+              },
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: 'rgba(255,255,255,0.3)',
+              },
+              '& .MuiSvgIcon-root': { color: onDarkPrimary },
+              '& .MuiInputBase-input::placeholder': {
+                color: onDarkFaint,
+                opacity: 1,
+              },
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  '& .MuiAutocomplete-listbox': { maxHeight: 260, fontSize: 13 },
+                },
+              },
+            }}
+          />
         </Box>
       )}
 

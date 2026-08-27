@@ -407,3 +407,77 @@ export interface SegmentPreview {
     cidade: string | null;
   }>;
 }
+
+// ─── Vínculos do credenciado (hospitais × especialidades) ────────────────
+
+export interface DoctorBrief {
+  id: string;
+  name: string;
+  email: string;
+  crm: string | null;
+  cellphone: string | null;
+  avatar_url: string | null;
+  approved_at: string | null;
+}
+
+export interface DoctorListItem extends DoctorBrief {
+  hospitals_count: number;
+  expertises_count: number;
+  hospitals_pending: number;
+  hospital_names: string[];
+}
+
+export interface AssignmentExpertise {
+  id: string;
+  name: string;
+  modality_worker: string;
+  linked: boolean;
+  user_expertise_id: string | null;
+  coordinator: boolean;
+  future_appointments: number;
+}
+
+export interface AssignmentHospital {
+  id: string;
+  name: string;
+  cidade: string | null;
+  uf: string | null;
+  logo_url: string | null;
+  linked: boolean;
+  user_hospital_id: string | null;
+  admin: boolean;
+  accepted: boolean;
+  future_appointments: number;
+  expertises: AssignmentExpertise[];
+}
+
+export interface DoctorAssignments {
+  doctor: DoctorBrief;
+  hospitals: AssignmentHospital[];
+}
+
+export interface SyncAssignmentsResult {
+  linked_hospitals: number;
+  unlinked_hospitals: number;
+  linked_expertises: number;
+  unlinked_expertises: number;
+  pending_hospitals: number;
+  assignments: DoctorAssignments;
+}
+
+export interface ImportableDoctor {
+  id: string;
+  name: string;
+  email: string;
+  crm: string | null;
+  avatar_url: string | null;
+  hospital_names: string[];
+  expertises_count: number;
+  is_hospital_admin: boolean;
+  existing_status: 'none' | 'member' | 'pending' | 'rejected';
+}
+
+export interface ImportDoctorsResult {
+  imported: number;
+  skipped: Array<{ name: string; reason: string }>;
+}
