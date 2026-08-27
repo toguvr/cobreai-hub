@@ -30,6 +30,10 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MenuItem from '@mui/material/MenuItem';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import DownloadingIcon from '@mui/icons-material/Downloading';
+import { ImportDoctorsDialog } from '../DoctorLinks/ImportDoctorsDialog';
 
 import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -110,6 +114,7 @@ interface ContractTemplate {
 
 export default function Registrations() {
   const { current } = useEnterprise();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Status>('pending');
   const [items, setItems] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(false);
@@ -135,6 +140,7 @@ export default function Registrations() {
   const [newLinkBankMode, setNewLinkBankMode] = useState<BankMode>('none');
   const [newLinkExpiresDays, setNewLinkExpiresDays] = useState<string>('30');
   const [creatingLink, setCreatingLink] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Modelos de contrato cadastrados na empresa (pra dropdown do
   // botão "Gerar contrato"). Carregados junto com o resto da tela.
@@ -432,13 +438,22 @@ export default function Registrations() {
             </Typography>
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setLinkModalOpen(true)}
-          >
-            Gerar link de convite
-          </Button>
+          <Stack direction={{ xs: 'column', sm: 'row' }} gap={1}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadingIcon />}
+              onClick={() => setImportOpen(true)}
+            >
+              Puxar dos hospitais
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setLinkModalOpen(true)}
+            >
+              Gerar link de convite
+            </Button>
+          </Stack>
         </Stack>
 
         {/* Painel de links de convite (tokenizados, com bank_mode) */}
@@ -775,6 +790,15 @@ export default function Registrations() {
               </Button>
             </>
           )}
+          {selected?.status === 'approved' && (
+            <Button
+              startIcon={<AccountTreeIcon />}
+              onClick={() => navigate(`/vinculos?user=${selected.user_id}`)}
+              disabled={acting}
+            >
+              Gerenciar vínculos
+            </Button>
+          )}
           {selected?.status === 'approved' && templates.length === 0 && (
             <Typography fontSize={11} color="text.secondary" mr={1}>
               Cadastre um modelo em Configurações → Contratos.
@@ -939,6 +963,12 @@ export default function Registrations() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ImportDoctorsDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
+      />
 
       <Snackbar
         open={copied}

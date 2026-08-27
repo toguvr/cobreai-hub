@@ -17,6 +17,7 @@ import Prices from './pages/Prices';
 import Settings from './pages/Settings';
 import Documents from './pages/Documents';
 import Registrations from './pages/Registrations';
+import DoctorLinks from './pages/DoctorLinks';
 import Benefits from './pages/Benefits';
 import Communications from './pages/Communications';
 import PayoutMonitoring from './pages/PayoutMonitoring';
@@ -106,6 +107,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Registrations />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/vinculos"
+        element={
+          <PrivateRoute>
+            <DoctorLinks />
           </PrivateRoute>
         }
       />
