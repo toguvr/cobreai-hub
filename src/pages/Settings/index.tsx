@@ -16,6 +16,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { toast } from 'react-toastify';
 import { PrivateLayout } from '../../components/PrivateLayout';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -60,17 +61,69 @@ const SETTINGS: Array<{
   key: SettingKey;
   label: string;
   group: 'Checkin' | 'Justificativas' | 'Plantões' | 'Outros';
+  /** O que a configuração faz, conforme a regra aplicada no backend. */
+  info: string;
 }> = [
-  { key: 'need_recognize', label: 'Reconhecimento facial', group: 'Checkin' },
-  { key: 'verify_geolocation', label: 'Geolocalização', group: 'Checkin' },
-  { key: 'late_entry_justification', label: 'Just. de atraso (checkin)', group: 'Justificativas' },
-  { key: 'early_exit_justification', label: 'Just. de saída antecipada', group: 'Justificativas' },
-  { key: 'auto_swap', label: 'Troca automática', group: 'Plantões' },
-  { key: 'auto_register', label: 'Presença automática', group: 'Plantões' },
-  { key: 'has_confirmation', label: 'Confirmação WhatsApp', group: 'Plantões' },
-  { key: 'score_productivity', label: 'Score de produtividade', group: 'Outros' },
-  { key: 'discount_absence', label: 'Descontar ausência', group: 'Outros' },
-  { key: 'send_remember_push', label: 'Lembrete push', group: 'Outros' },
+  {
+    key: 'need_recognize',
+    label: 'Reconhecimento facial',
+    group: 'Checkin',
+    info: 'No checkin e no checkout o médico precisa tirar uma foto, comparada com a foto cadastrada dele. Sem correspondência, o ponto não é validado.',
+  },
+  {
+    key: 'verify_geolocation',
+    label: 'Geolocalização',
+    group: 'Checkin',
+    info: 'Bloqueia o ponto se o médico estiver mais longe do hospital que a distância máxima configurada nele. Exige o hospital com latitude e longitude cadastradas.',
+  },
+  {
+    key: 'late_entry_justification',
+    label: 'Just. de atraso (checkin)',
+    group: 'Justificativas',
+    info: 'Checkin depois do início do plantão passa a exigir justificativa do médico, que vai para a tela de Justificativas do hospital.',
+  },
+  {
+    key: 'early_exit_justification',
+    label: 'Just. de saída antecipada',
+    group: 'Justificativas',
+    info: 'Checkout antes do término do plantão passa a exigir justificativa do médico, que vai para a tela de Justificativas do hospital.',
+  },
+  {
+    key: 'auto_swap',
+    label: 'Troca automática',
+    group: 'Plantões',
+    info: 'Quando um médico se candidata a um plantão em aberto ou repassado, a troca é confirmada na hora, sem precisar de aprovação de um admin.',
+  },
+  {
+    key: 'auto_register',
+    label: 'Presença automática',
+    group: 'Plantões',
+    info: 'Uma rotina registra o ponto automaticamente nos plantões desta especialidade que ficaram sem checkin ou sem checkout.',
+  },
+  {
+    key: 'has_confirmation',
+    label: 'Confirmação WhatsApp',
+    group: 'Plantões',
+    info: 'Inclui os plantões desta especialidade na rotina que manda WhatsApp pedindo confirmação de presença.',
+  },
+  {
+    key: 'score_productivity',
+    label: 'Score de produtividade',
+    group: 'Outros',
+    info: 'Sinalizador gravado na especialidade. Hoje nenhuma rotina do backend lê este campo — ligar ou desligar não muda comportamento nenhum.',
+  },
+  {
+    key: 'discount_absence',
+    label: 'Descontar ausência',
+    group: 'Outros',
+    info: 'Só vale para especialidade mensalista — no horista o backend força desligado. Hoje nenhuma rotina lê este campo para efetivar o desconto.',
+  },
+  {
+    key: 'send_remember_push',
+    label: 'Lembrete push',
+    group: 'Outros',
+    info: 'Inclui os plantões desta especialidade na rotina que envia push lembrando o médico do plantão.',
+  },
 ];
 
 const C = {
@@ -267,9 +320,21 @@ export default function Settings() {
                     }}
                   >
                     <Box flex={1} minWidth={0}>
-                      <Typography fontSize={13} fontWeight={500} noWrap>
-                        {s.label}
-                      </Typography>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Typography fontSize={13} fontWeight={500} noWrap>
+                          {s.label}
+                        </Typography>
+                        <Tooltip title={s.info} enterTouchDelay={0} arrow>
+                          <InfoOutlinedIcon
+                            sx={{
+                              fontSize: 14,
+                              color: C.textMuted,
+                              cursor: 'help',
+                              flexShrink: 0,
+                            }}
+                          />
+                        </Tooltip>
+                      </Box>
                       <Typography
                         fontSize={10}
                         color={C.textMuted}
@@ -417,9 +482,21 @@ export default function Settings() {
                             }}
                           >
                             <Box flex={1} minWidth={0}>
-                              <Typography fontSize={13} fontWeight={500} noWrap>
-                                {s.label}
-                              </Typography>
+                              <Box display="flex" alignItems="center" gap={0.5}>
+                                <Typography fontSize={13} fontWeight={500} noWrap>
+                                  {s.label}
+                                </Typography>
+                                <Tooltip title={s.info} enterTouchDelay={0} arrow>
+                                  <InfoOutlinedIcon
+                                    sx={{
+                                      fontSize: 14,
+                                      color: C.textMuted,
+                                      cursor: 'help',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                </Tooltip>
+                              </Box>
                               <Typography fontSize={10} color={C.textMuted} textTransform="uppercase" letterSpacing={0.4}>
                                 {s.group}
                               </Typography>
