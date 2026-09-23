@@ -16,6 +16,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
+import AddBusinessIcon from '@mui/icons-material/AddBusiness';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PriceChangeIcon from '@mui/icons-material/PriceChange';
@@ -52,6 +53,11 @@ const filterEnterprises = createFilterOptions<EnterpriseOption>({
 const navItems = [
   { label: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { label: 'Hospitais', icon: <LocalHospitalIcon />, path: '/hospitais' },
+  {
+    label: 'Cadastro de hospitais',
+    icon: <AddBusinessIcon />,
+    path: '/cadastro-hospitais',
+  },
   { label: 'Membros', icon: <PeopleIcon />, path: '/usuarios' },
   { label: 'Credenciamento', icon: <HowToRegIcon />, path: '/credenciamento' },
   { label: 'Vínculos', icon: <AccountTreeIcon />, path: '/vinculos' },
