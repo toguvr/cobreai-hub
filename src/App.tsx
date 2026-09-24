@@ -19,10 +19,14 @@ import Documents from './pages/Documents';
 import Registrations from './pages/Registrations';
 import DoctorLinks from './pages/DoctorLinks';
 import Benefits from './pages/Benefits';
-import Communications from './pages/Communications';
-import PayoutMonitoring from './pages/PayoutMonitoring';
+// Rotas ocultas do menu: os imports seguem comentados junto com elas
+// porque noUnusedLocals reprova o build com import sem uso.
+// import Communications from './pages/Communications';
+// import PayoutMonitoring from './pages/PayoutMonitoring';
 import NfUpload from './pages/NfUpload';
 import PublicRegistration from './pages/PublicRegistration';
+import HospitalRegistrations from './pages/HospitalRegistrations';
+import PublicHospitalRegistration from './pages/PublicHospitalRegistration';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -59,6 +63,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <HospitalDetail />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/cadastro-hospitais"
+        element={
+          <PrivateRoute>
+            <HospitalRegistrations />
           </PrivateRoute>
         }
       />
@@ -154,6 +166,13 @@ function AppRoutes() {
       <Route
         path="/credenciamento/link/:token"
         element={<PublicRegistration />}
+      />
+
+      {/* Rota PÚBLICA — sem auth. Cadastro de hospital por link; vira
+          solicitação e só existe de fato depois da aprovação no hub. */}
+      <Route
+        path="/cadastro-hospital/link/:token"
+        element={<PublicHospitalRegistration />}
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />
