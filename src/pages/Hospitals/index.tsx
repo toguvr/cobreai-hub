@@ -202,12 +202,30 @@ export default function Hospitals() {
   const handleSaveForm = async () => {
     setSavingForm(true);
     try {
+      // O form vai inteiro no body, e o raio é coluna inteira no banco: em
+      // branco ele seria '' e a gravação quebraria. undefined faz o back
+      // preservar o valor atual (ele atribui direto, e o TypeORM ignora
+      // undefined no save); zero ou negativo também não passa, senão
+      // ninguém mais bate ponto no hospital.
+      const parsedMaxDistance = Number(form.max_distance);
+      const payload = {
+        ...form,
+        max_distance:
+          form.max_distance !== '' &&
+          form.max_distance !== null &&
+          form.max_distance !== undefined &&
+          Number.isFinite(parsedMaxDistance) &&
+          parsedMaxDistance > 0
+            ? parsedMaxDistance
+            : undefined,
+      };
+
       if (editMode === 'create') {
         // Backend cria o hospital + o vínculo automaticamente quando enterprise_id vem no body
-        await api.post('/hospital', { ...form, enterprise_id: current?.id });
+        await api.post('/hospital', { ...payload, enterprise_id: current?.id });
         toast.success('Hospital criado e vinculado!');
       } else {
-        await api.put('/hospital', { ...form, hospital_id: form.id });
+        await api.put('/hospital', { ...payload, hospital_id: form.id });
         toast.success('Hospital atualizado!');
       }
       setAddOpen(false);
@@ -357,6 +375,15 @@ export default function Hospitals() {
                 <TextField label="Mín. horas" size="small" type="number" fullWidth {...field('min_hours')} />
                 <TextField label="Tolerância (min)" size="small" type="number" fullWidth {...field('min_tolerance')} />
               </Box>
+              <TextField
+                label="Raio para check-in (metros)"
+                size="small"
+                type="number"
+                fullWidth
+                inputProps={{ min: 1 }}
+                helperText="Distância máxima do hospital em que o médico pode bater ponto. Padrão: 250 m."
+                {...field('max_distance')}
+              />
               <TextField label="CEP" size="small" fullWidth {...field('cep')} onBlur={getCep} />
               <TextField label="Rua" size="small" fullWidth {...field('logradouro')} />
               <Box display="flex" gap={2}>
