@@ -167,7 +167,7 @@ export default function Hospitals() {
   useEffect(() => { load(); }, [current?.id]);
 
   const openAdd = () => {
-    setForm({});
+    setForm({ max_distance: 250 });
     setEditMode('create');
     setAddOpen(true);
   };
