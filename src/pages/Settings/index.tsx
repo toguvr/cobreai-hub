@@ -24,6 +24,7 @@ import api from '../../services/api';
 import ClickSignSection from './ClickSignSection';
 import WhatsappConfigSection from './WhatsappConfigSection';
 import BillingSettingsSection from './BillingSettingsSection';
+import IntegrationTokenSection from './IntegrationTokenSection';
 
 interface ExpertiseRow {
   id: string;
@@ -274,6 +275,10 @@ export default function Settings() {
           />
         )}
 
+        {enterpriseId && isOrgAdmin && (
+          <IntegrationTokenSection enterpriseId={enterpriseId} />
+        )}
+
         {!loading && rows.length > 0 && (
           <Paper
             sx={{
@@ -298,7 +303,8 @@ export default function Settings() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gridTemplateColumns:
+                  'repeat(auto-fit, minmax(min(100%, 440px), 1fr))',
                 gap: 1,
               }}
             >
