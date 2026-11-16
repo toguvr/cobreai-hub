@@ -19,6 +19,7 @@ import Documents from './pages/Documents';
 import Registrations from './pages/Registrations';
 import DoctorLinks from './pages/DoctorLinks';
 import Benefits from './pages/Benefits';
+import Badges from './pages/Badges';
 // Rotas ocultas do menu: os imports seguem comentados junto com elas
 // porque noUnusedLocals reprova o build com import sem uso.
 // import Communications from './pages/Communications';
@@ -135,6 +136,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <Benefits />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/crachas"
+        element={
+          <PrivateRoute>
+            <Badges />
           </PrivateRoute>
         }
       />

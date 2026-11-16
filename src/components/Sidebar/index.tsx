@@ -26,6 +26,7 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
+import BadgeIcon from '@mui/icons-material/Badge';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEnterprise } from '../../contexts/EnterpriseContext';
@@ -63,6 +64,7 @@ const navItems = [
   { label: 'Vínculos', icon: <AccountTreeIcon />, path: '/vinculos' },
   { label: 'Documentos', icon: <DescriptionIcon />, path: '/documentos' },
   { label: 'Benefícios', icon: <CardGiftcardIcon />, path: '/beneficios' },
+  { label: 'Crachás', icon: <BadgeIcon />, path: '/crachas' },
   { label: 'Financeiro', icon: <AttachMoneyIcon />, path: '/financeiro' },
   { label: 'Preços & Fechamento', icon: <PriceChangeIcon />, path: '/precos' },
   // Ocultos do menu a pedido — as rotas seguem ativas em /monitoramento e
